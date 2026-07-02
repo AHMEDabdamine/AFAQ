@@ -12,7 +12,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-COPY server.js ./
+COPY server.js .
+COPY server ./server
+COPY src/db ./src/db
 
 RUN mkdir -p /data/uploads && ln -s /data/uploads ./upload
 
