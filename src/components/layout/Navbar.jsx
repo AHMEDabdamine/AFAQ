@@ -109,14 +109,9 @@ export default function Navbar() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={sidebarSpring}
-              className="fixed top-0 right-0 h-full z-50 shadow-2xl md:hidden"
-              style={{
-                width: 280,
-                background: 'var(--color-card)',
-                borderLeft: '1px solid var(--color-border-light)',
-              }}
+              className="fixed top-0 right-0 h-full w-[280px] z-50 shadow-2xl md:hidden bg-white border-l border-gray-200"
             >
-              <div className="flex items-center justify-between p-4" style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
                 <motion.div
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -165,8 +160,7 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...sidebarSpring, delay: 0.35 }}
-                  className="mt-4 pt-4"
-                  style={{ borderTop: '1px solid var(--color-border-light)' }}
+                  className="mt-4 pt-4 border-t border-gray-200"
                 >
                   <Link
                     to="/join"
