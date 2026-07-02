@@ -1,25 +1,17 @@
 FROM node:20-alpine AS build
+
+WORKDIR /app
+
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
-WORKDIR /app
+
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+
 COPY package.json package-lock.json ./
 RUN npm ci
+
 COPY . .
+
+RUN echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL"
 RUN npm run build
-
-FROM node:20-alpine
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
-COPY server.js .
-COPY server ./server
-COPY src/db ./src/db
-
-RUN mkdir -p /data/uploads && ln -s /data/uploads ./upload
-
-EXPOSE 80
-ENV PORT=80
-ENV NODE_ENV=production
-VOLUME /data/uploads
-CMD ["node", "server.js"]
