@@ -1,41 +1,45 @@
-import { useRef } from "react"
+import { useRef } from "react";
 
 const leftImages = [
-  "/images/side/pi-removed-bg.png",
-  "/images/side/led-removed-bg.png",
-  "/images/side/screwdriver.png",
-]
+  "/images/side/pi-removed-bg.webp",
+  "/images/side/led-removed-bg.webp",
+  "/images/side/screwdriver.webp",
+];
 const rightImages = [
-  "/images/side/robocar-removed-bg.png",
-  "/images/side/esp32-removed-bg.png",
-  "/images/side/breadbord.png",
-]
+  "/images/side/robocar-removed-bg.webp",
+  "/images/side/esp32-removed-bg.webp",
+  "/images/side/breadbord.webp",
+];
 
-const counters = { left: 0, right: 0 }
+const counters = { left: 0, right: 0 };
 
 function pickForId(id, pool) {
-  const limited = pool.filter((p) => !p.includes("robocar"))
-  const poolSize = pool.length
-  const limitedSize = limited.length
+  const limited = pool.filter((p) => !p.includes("robocar"));
+  const poolSize = pool.length;
+  const limitedSize = limited.length;
 
-  if (id <= poolSize) return pool[id - 1]
-  const idx = id - poolSize - 1
-  if (idx < limitedSize) return limited[idx]
-  return limited[(idx - limitedSize) % limitedSize]
+  if (id <= poolSize) return pool[id - 1];
+  const idx = id - poolSize - 1;
+  if (idx < limitedSize) return limited[idx];
+  return limited[(idx - limitedSize) % limitedSize];
 }
 
-export default function SideImage({
-  side = "left",
-  offsetY = 0,
-  size = 380,
-}) {
-  const ref = useRef(0)
-  if (ref.current === 0) ref.current = ++counters[side]
+export default function SideImage({ side = "left", offsetY = 0, size = 380 }) {
+  const ref = useRef(0);
+  if (ref.current === 0) ref.current = ++counters[side];
 
-  const pool = side === "left" ? leftImages : rightImages
-  const src = pickForId(ref.current, pool)
-  const multiplier = src.includes("esp32") ? 1.35 : src.includes("robocar") ? 1.35 : src.includes("breadbord") ? 1.3 : src.includes("pi") ? 1.3 : 1
-  const actualSize = Math.floor(size * multiplier)
+  const pool = side === "left" ? leftImages : rightImages;
+  const src = pickForId(ref.current, pool);
+  const multiplier = src.includes("esp32")
+    ? 1.35
+    : src.includes("robocar")
+    ? 1.35
+    : src.includes("breadbord")
+    ? 1.3
+    : src.includes("pi")
+    ? 1.3
+    : 1;
+  const actualSize = Math.floor(size * multiplier);
   return (
     <img
       src={src}
@@ -52,5 +56,5 @@ export default function SideImage({
         filter: "drop-shadow(0 25px 35px rgba(36, 96, 231, 0.25))",
       }}
     />
-  )
+  );
 }

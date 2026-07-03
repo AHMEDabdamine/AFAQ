@@ -5,10 +5,10 @@ import ReactMarkdown from "react-markdown";
 
 function autoLink(text) {
   return text.replace(/\b(https?:\/\/[^\s<)>]+)/g, (match, offset, str) => {
-    const before = str[offset - 1]
-    if (before === '<' || before === '(' || before === '[') return match
-    return `<${match}>`
-  })
+    const before = str[offset - 1];
+    if (before === "<" || before === "(" || before === "[") return match;
+    return `<${match}>`;
+  });
 }
 
 function formatTime() {
@@ -47,7 +47,7 @@ export default function ChatMessage({ role, content, streaming }) {
           <User size={14} />
         ) : (
           <img
-            src="/images/ai/pfp.png"
+            src="/images/ai/pfp.webp"
             alt="AI"
             className="w-full h-full object-cover"
           />
@@ -106,7 +106,10 @@ export default function ChatMessage({ role, content, streaming }) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: "var(--color-accent)", wordBreak: "break-all" }}
+                    style={{
+                      color: "var(--color-accent)",
+                      wordBreak: "break-all",
+                    }}
                     className="underline hover:opacity-80"
                   >
                     {children}

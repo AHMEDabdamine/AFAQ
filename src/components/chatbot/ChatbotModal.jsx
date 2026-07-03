@@ -230,7 +230,7 @@ export default function ChatbotModal({ open, onClose }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.93, y: 16 }}
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
-             className="fixed z-[101] bottom-0 right-0 md:bottom-24 md:right-6 w-full md:w-96 max-h-[92dvh] md:max-h-[600px] md:h-[600px] flex flex-col rounded-t-2xl md:rounded-2xl overflow-hidden shadow-2xl border"
+            className="fixed z-[101] bottom-0 right-0 md:bottom-24 md:right-6 w-full md:w-96 max-h-[92dvh] md:max-h-[600px] md:h-[600px] flex flex-col rounded-t-2xl md:rounded-2xl overflow-hidden shadow-2xl border"
             style={{
               background: "var(--color-card)",
               borderColor: "var(--color-border-light)",
@@ -250,7 +250,7 @@ export default function ChatbotModal({ open, onClose }) {
                   style={{ background: "var(--color-accent)" }}
                 >
                   <img
-                    src="/images/ai/pfp.png"
+                    src="/images/ai/pfp.webp"
                     alt="AI"
                     className="w-full h-full object-cover"
                   />
@@ -332,7 +332,7 @@ export default function ChatbotModal({ open, onClose }) {
                     style={{ background: "var(--color-accent-soft)" }}
                   >
                     <img
-                      src="/images/ai/pfp.png"
+                      src="/images/ai/pfp.webp"
                       alt="AI"
                       className="w-full h-full object-cover"
                     />
@@ -392,7 +392,7 @@ export default function ChatbotModal({ open, onClose }) {
                     style={{ background: "var(--color-bg-alt)" }}
                   >
                     <img
-                      src="/images/ai/pfp.png"
+                      src="/images/ai/pfp.webp"
                       alt="AI"
                       className="w-full h-full object-cover"
                     />

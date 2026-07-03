@@ -17,7 +17,9 @@ function Img({ src, alt, className, style, fetchPriority, loading }) {
   if (failed) {
     return (
       <div
-        className={`flex items-center justify-center bg-blue-100 border-2 border-blue-200 text-blue-400 text-sm rounded-2xl ${className || ""}`}
+        className={`flex items-center justify-center bg-blue-100 border-2 border-blue-200 text-blue-400 text-sm rounded-2xl ${
+          className || ""
+        }`}
         style={style}
       >
         {alt || "Image"}
@@ -50,16 +52,21 @@ function Badge({ icon, label, className }) {
 
 function HeroLeft() {
   const { t, i18n } = useTranslation("home");
-  const isRTL = i18n.language === 'ar';
+  const isRTL = i18n.language === "ar";
   const lines = t("hero.slogan1").split("\n");
 
   return (
-    <div className={`flex-1 text-center ${isRTL ? 'lg:text-right' : 'lg:text-left'} relative`}>
+    <div
+      className={`flex-1 text-center ${
+        isRTL ? "lg:text-right" : "lg:text-left"
+      } relative`}
+    >
       <div
         className="absolute inset-0 z-0 md:hidden animate-glow"
         style={{
-          background: 'radial-gradient(ellipse at center, rgba(59,130,246,0.35) 0%, transparent 70%)',
-          borderRadius: 'inherit',
+          background:
+            "radial-gradient(ellipse at center, rgba(59,130,246,0.35) 0%, transparent 70%)",
+          borderRadius: "inherit",
         }}
       />
       <div className="relative z-10 hero-fade-up text-blue-500 text-sm font-semibold tracking-[0.15em] uppercase mb-5">
@@ -88,7 +95,11 @@ function HeroLeft() {
         ))}
       </h1>
 
-      <p className={`relative z-10 hero-fade-up-d3 text-slate-500 text-base sm:text-lg leading-relaxed max-w-lg mb-4 mx-auto ${isRTL ? 'lg:mr-0 lg:ml-auto' : 'lg:mx-0'}`}>
+      <p
+        className={`relative z-10 hero-fade-up-d3 text-slate-500 text-base sm:text-lg leading-relaxed max-w-lg mb-4 mx-auto ${
+          isRTL ? "lg:mr-0 lg:ml-auto" : "lg:mx-0"
+        }`}
+      >
         {(() => {
           const words = t("hero.subtitle").split(" ");
           if (words.length < 2) return t("hero.subtitle");
@@ -116,7 +127,7 @@ function HeroLeft() {
 
 function HeroRight() {
   const { i18n } = useTranslation("home");
-  const isRTL = i18n.language === 'ar';
+  const isRTL = i18n.language === "ar";
   const ringStyle = (tilt, radius, opts = {}) => ({
     width: radius * 2,
     height: radius * 2,
@@ -163,9 +174,8 @@ function HeroRight() {
   return (
     <div className="hidden lg:block flex-1 relative w-full max-w-[280px] sm:max-w-sm lg:max-w-none h-[320px] sm:h-[400px] lg:h-[520px] xl:h-[600px]">
       <Img
-        src="/images/hero/bolt.png"
+        src="/images/hero/bolt.webp"
         alt="Bolt"
-        fetchPriority="high"
         className="absolute inset-0 w-full h-full z-0 object-contain"
         style={{
           transform: "scale(1.35)",
@@ -257,48 +267,72 @@ function HeroRight() {
       <Badge
         icon={<Code size={16} className="text-blue-500" />}
         label="Arduino"
-        className={`hidden sm:flex top-[3%] ${isRTL ? 'left-[3%]' : 'right-[3%]'} z-20`}
+        className={`hidden sm:flex top-[3%] ${
+          isRTL ? "left-[3%]" : "right-[3%]"
+        } z-20`}
       />
       <Badge
         icon={<Cpu size={16} className="text-blue-500" />}
         label="Robotics"
-        className={`hidden sm:flex top-[44%] ${isRTL ? 'right-[-1%]' : 'left-[-1%]'} z-20`}
+        className={`hidden sm:flex top-[44%] ${
+          isRTL ? "right-[-1%]" : "left-[-1%]"
+        } z-20`}
       />
       <Badge
         icon={<Zap size={16} className="text-blue-500" />}
         label="Electronics"
-        className={`hidden sm:flex bottom-[3%] ${isRTL ? 'left-[3%]' : 'right-[3%]'} z-20`}
+        className={`hidden sm:flex bottom-[3%] ${
+          isRTL ? "left-[3%]" : "right-[3%]"
+        } z-20`}
       />
 
-      <div className={`hidden sm:flex absolute top-[12%] ${isRTL ? 'right-[0%]' : 'left-[0%]'} z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}>
+      <div
+        className={`hidden sm:flex absolute top-[12%] ${
+          isRTL ? "right-[0%]" : "left-[0%]"
+        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+      >
         <Lightbulb size={16} />
       </div>
-      <div className={`hidden sm:flex absolute top-[2%] ${isRTL ? 'left-[20%]' : 'right-[20%]'} z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}>
+      <div
+        className={`hidden sm:flex absolute top-[2%] ${
+          isRTL ? "left-[20%]" : "right-[20%]"
+        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+      >
         <Rocket size={16} />
       </div>
-      <div className={`hidden sm:flex absolute bottom-[40%] ${isRTL ? 'right-[-1%]' : 'left-[-1%]'} z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}>
+      <div
+        className={`hidden sm:flex absolute bottom-[40%] ${
+          isRTL ? "right-[-1%]" : "left-[-1%]"
+        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+      >
         <Users size={16} />
       </div>
 
       <Img
-        src="/images/hero/uno.png"
+        src="/images/hero/uno.webp"
         alt="Arduino"
         loading="lazy"
-        className={`hidden sm:block absolute top-[5%] ${isRTL ? 'right-[15%]' : 'left-[15%]'} w-72 lg:w-80 -rotate-6 float-asset z-10`}
+        className={`hidden sm:block absolute top-[5%] ${
+          isRTL ? "right-[15%]" : "left-[15%]"
+        } w-72 lg:w-80 -rotate-6 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
       <Img
-        src="/images/hero/robocar.png"
+        src="/images/hero/robocar.webp"
         alt="Robocar"
-        loading="lazy"
-        className={`hidden sm:block absolute bottom-[22%] ${isRTL ? 'left-[-5%]' : 'right-[-5%]'} w-96 lg:w-[25rem] rotate-3 float-asset z-10`}
+        fetchPriority="high"
+        className={`hidden sm:block absolute bottom-[22%] ${
+          isRTL ? "left-[-5%]" : "right-[-5%]"
+        } w-96 lg:w-[25rem] rotate-3 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
       <Img
-        src="/images/hero/bord.png"
+        src="/images/hero/bord.webp"
         alt="Breadboard"
         loading="lazy"
-        className={`hidden sm:block absolute bottom-[5%] ${isRTL ? 'right-[5%]' : 'left-[5%]'} w-44 lg:w-52 -rotate-3 float-asset z-10`}
+        className={`hidden sm:block absolute bottom-[5%] ${
+          isRTL ? "right-[5%]" : "left-[5%]"
+        } w-44 lg:w-52 -rotate-3 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
     </div>
@@ -315,16 +349,16 @@ function StatsBar() {
   const ref = useRef(null);
 
   useEffect(() => {
-    fetch('/api/stats')
-      .then(r => r.json())
-      .then(data => {
-        setEventCount(data.events)
-        setProjectCount(data.projects)
-        setMemberCount(data.members)
-        setDataLoaded(true)
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((data) => {
+        setEventCount(data.events);
+        setProjectCount(data.projects);
+        setMemberCount(data.members);
+        setDataLoaded(true);
       })
-      .catch(() => setDataLoaded(true))
-  }, [])
+      .catch(() => setDataLoaded(true));
+  }, []);
 
   const stats = [
     {
@@ -369,7 +403,10 @@ function StatsBar() {
             current = val;
             clearInterval(timer);
           }
-          setCounts((prev) => ({ ...prev, [idx]: current + (s.number.includes("+") ? "+" : "") }));
+          setCounts((prev) => ({
+            ...prev,
+            [idx]: current + (s.number.includes("+") ? "+" : ""),
+          }));
         }, 40);
       });
     };
@@ -392,10 +429,16 @@ function StatsBar() {
   }, [dataLoaded]);
 
   return (
-    <div ref={ref} className="w-full bg-[#F1F5F9] border-t border-slate-200 py-6 md:py-12">
+    <div
+      ref={ref}
+      className="w-full bg-[#F1F5F9] border-t border-slate-200 py-6 md:py-12"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-16 grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s, i) => (
-          <div key={i} className="flex flex-col items-center justify-center text-center bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-6 md:py-8">
+          <div
+            key={i}
+            className="flex flex-col items-center justify-center text-center bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-6 md:py-8"
+          >
             <span className="text-blue-500 mb-3">{s.icon}</span>
             <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F172A] mb-1">
               {counts[i] || "0"}

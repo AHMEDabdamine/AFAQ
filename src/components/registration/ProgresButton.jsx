@@ -102,7 +102,11 @@ export default function ProgresButton({ onSuccess }) {
         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[100px] font-semibold text-sm"
         style={{ background: "var(--color-accent)", color: "#fff" }}
       >
-        <img src="/images/logo/progres.png" alt="" className="w-5 h-5 rounded-full" />
+        <img
+          src="/images/logo/progres.webp"
+          alt=""
+          className="w-5 h-5 rounded-full"
+        />
         {t("progres.button")}
       </button>
 
