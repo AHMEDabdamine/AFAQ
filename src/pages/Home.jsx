@@ -9,6 +9,7 @@ import GalleryPreview from '../components/home/GalleryPreview'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight } from 'lucide-react'
 import SideImage from '../components/shared/SideImage'
+import { cn } from '../lib/utils'
 
 const spring = { type: 'spring', damping: 28, stiffness: 120 }
 
@@ -50,13 +51,33 @@ export default function Home() {
   return (
     <>
       <HeroSection />
-      <IntroSection />
-      <FeaturedActivities />
-      <UpcomingEvents />
-      <ProjectHighlights />
-      {/* <StatisticsSection /> */}
-      <GalleryPreview />
-      <CTASection />
+      <div className="relative" style={{ background: 'var(--color-bg)' }}>
+        <div
+          className={cn(
+            "absolute inset-0 pointer-events-none",
+            "[background-size:20px_20px]",
+            "[background-image:radial-gradient(#d4d4d4_1px,transparent_1px)]",
+            "dark:[background-image:radial-gradient(#404040_1px,transparent_1px)]",
+          )}
+        />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'var(--color-bg)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, transparent 20%, black 70%)',
+            maskImage: 'radial-gradient(ellipse at center, transparent 20%, black 70%)',
+          }}
+        />
+        <div className="relative z-10">
+          <IntroSection />
+          <FeaturedActivities />
+          <UpcomingEvents />
+          <ProjectHighlights />
+          {/* <StatisticsSection /> */}
+          <GalleryPreview />
+          <CTASection />
+        </div>
+      </div>
     </>
   )
 }

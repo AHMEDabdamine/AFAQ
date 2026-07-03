@@ -40,7 +40,7 @@ export default function UpcomingEvents() {
   if (events.length === 0) return null
 
   return (
-    <section className="py-16 md:py-20 relative z-0" style={{ background: 'var(--color-bg)' }}>
+    <section className="py-16 md:py-20 relative z-0">
       <SideImage side="left" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">

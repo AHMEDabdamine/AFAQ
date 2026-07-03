@@ -23,7 +23,6 @@ export default function IntroSection() {
   return (
     <section
       className="py-16 md:py-20 relative z-0"
-      style={{ background: "var(--color-bg)" }}
     >
       <SideImage side="left" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

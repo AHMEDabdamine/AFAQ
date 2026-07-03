@@ -41,12 +41,12 @@ export default function GalleryPreview() {
   if (images.length === 0) return null
 
   return (
-    <section className="py-16 md:py-20 relative z-0" style={{ background: 'var(--color-bg)' }}>
+    <section className="py-16 md:py-20 relative z-0">
       <SideImage side="right" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <div className="eyebrow eyebrow-center mb-4">{t('gallery.title')}</div>
-          <h2 className="text-3xl md:text-4xl font-bold">{t('gallery.title')}</h2>
+        <div className="text-center mb-8 md:mb-12">
+          <div className="eyebrow eyebrow-center mb-2 md:mb-4">{t('gallery.title')}</div>
+          <h2 className="text-2xl md:text-4xl font-bold">{t('gallery.title')}</h2>
         </div>
 
         <div className="hidden md:grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '180px' }}>
@@ -73,21 +73,33 @@ export default function GalleryPreview() {
           })}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:hidden">
-          {images.map((url, i) => (
-            <motion.button
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ ...spring, delay: i * 0.06 }}
-              onClick={() => setLightboxIndex(i)}
-              className="relative overflow-hidden rounded-xl group cursor-pointer border-0 outline-none"
-              style={{ aspectRatio: i % 3 === 0 ? '4/5' : '1' }}
-            >
-              <img src={url} alt="" className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105" loading="lazy" />
-            </motion.button>
-          ))}
+        <div className="grid grid-cols-2 gap-3 md:hidden">
+          {images.map((url, i) => {
+            const layouts = [
+              { colSpan: 2, aspect: '16/9' },
+              { colSpan: 1, aspect: '1/1' },
+              { colSpan: 1, aspect: '1/1' },
+              { colSpan: 2, aspect: '16/9' },
+            ]
+            const l = layouts[i] || layouts[i % layouts.length]
+            return (
+              <motion.button
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ ...spring, delay: i * 0.06 }}
+                onClick={() => setLightboxIndex(i)}
+                className="relative overflow-hidden rounded-xl group cursor-pointer border-0 outline-none"
+                style={{
+                  gridColumn: `span ${l.colSpan}`,
+                  aspectRatio: l.aspect,
+                }}
+              >
+                <img src={url} alt="" className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105" loading="lazy" />
+              </motion.button>
+            )
+          })}
         </div>
 
         <div className="text-center mt-10">
