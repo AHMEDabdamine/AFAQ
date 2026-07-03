@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Users } from "lucide-react";
-import { supabase } from "../../lib/supabase";
 import SideImage from "../shared/SideImage";
 
 const spring = { type: "spring", damping: 28, stiffness: 120 };
@@ -13,28 +12,12 @@ export default function IntroSection() {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   useEffect(() => {
-    const fetchImage = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("page_content")
-          .select("image_url")
-          .eq("section", "home_intro")
-          .single();
-
-        if (error) {
-          console.warn('Error fetching page content image:', error.message);
-          return;
-        }
-
-        if (data?.image_url) {
-          setAboutImage(data.image_url);
-        }
-      } catch (err) {
-        console.error('Failed to fetch page content image:', err);
-      }
-    };
-
-    fetchImage();
+    fetch("/api/page-content/home_intro")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.image_url) setAboutImage(data.image_url);
+      })
+      .catch(() => {});
   }, []);
 
   return (
