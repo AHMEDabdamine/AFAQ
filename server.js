@@ -106,9 +106,14 @@ const app = express();
 app.set("trust proxy", 1);
 
 // CORS (must be early)
-const APP_URL = process.env.VITE_APP_URL || 'http://localhost:3000';
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', APP_URL);
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -508,6 +513,12 @@ app.post(
 // --- Progres MESRS API proxy ---
 
 const PROGRES_BASE = "https://progres.mesrs.dz/api";
+const PROGRES_TIMEOUT = 30_000;
+
+const progresApi = axios.create({
+  baseURL: PROGRES_BASE,
+  timeout: PROGRES_TIMEOUT,
+});
 
 app.post("/api/progres/auth", async (req, res) => {
   const { username, password } = req.body;
@@ -517,7 +528,7 @@ app.post("/api/progres/auth", async (req, res) => {
       .json({ error: "Username and password are required." });
   }
   try {
-    const { data } = await axios.post(`${PROGRES_BASE}/authentication/v1/`, {
+    const { data } = await progresApi.post("/authentication/v1/", {
       username,
       password,
     });
@@ -529,7 +540,12 @@ app.post("/api/progres/auth", async (req, res) => {
     ) {
       return res.status(401).json({ error: "Invalid Progres credentials." });
     }
-    console.error("Progres auth error:", err.message);
+    console.error("Progres auth error:", {
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      data: err.response?.data,
+    });
     res.status(502).json({ error: "Progres API unreachable." });
   }
 });
@@ -544,10 +560,10 @@ app.get("/api/progres/student", async (req, res) => {
   }
   try {
     const [individuRes, diasRes] = await Promise.all([
-      axios.get(`${PROGRES_BASE}/infos/bac/${uuid}/individu`, {
+      progresApi.get(`/infos/bac/${uuid}/individu`, {
         headers: { Authorization: authHeader },
       }),
-      axios.get(`${PROGRES_BASE}/infos/bac/${uuid}/dias`, {
+      progresApi.get(`/infos/bac/${uuid}/dias`, {
         headers: { Authorization: authHeader },
       }),
     ]);
@@ -576,7 +592,12 @@ app.get("/api/progres/student", async (req, res) => {
     if (err.response && err.response.status === 401) {
       return res.status(401).json({ error: "Session expired." });
     }
-    console.error("Progres student fetch error:", err.message);
+    console.error("Progres student fetch error:", {
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      data: err.response?.data,
+    });
     res.status(502).json({ error: "Failed to fetch student data." });
   }
 });
