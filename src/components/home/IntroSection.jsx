@@ -13,14 +13,28 @@ export default function IntroSection() {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("page_content")
-      .select("image_url")
-      .eq("section", "home_intro")
-      .single()
-      .then(({ data }) => {
-        if (data?.image_url) setAboutImage(data.image_url);
-      });
+    const fetchImage = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("page_content")
+          .select("image_url")
+          .eq("section", "home_intro")
+          .single();
+
+        if (error) {
+          console.warn('Error fetching page content image:', error.message);
+          return;
+        }
+
+        if (data?.image_url) {
+          setAboutImage(data.image_url);
+        }
+      } catch (err) {
+        console.error('Failed to fetch page content image:', err);
+      }
+    };
+
+    fetchImage();
   }, []);
 
   return (
