@@ -48,8 +48,10 @@ export const TextHoverEffect = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onMouseMove={(e) => setCursor({ x: e.clientX, y: e.clientY })}
-      className={cn("select-none uppercase cursor-pointer", className)}
-      style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+      className={cn(
+        "afaq-wordmark select-none uppercase cursor-pointer",
+        className
+      )}
     >
       <defs>
         <linearGradient

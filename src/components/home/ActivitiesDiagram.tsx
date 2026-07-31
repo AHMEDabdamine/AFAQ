@@ -1,698 +1,683 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import {
   Cpu,
-  Rocket,
-  Wifi,
-  Clock,
+  Bot,
+  RadioTower,
+  Timer,
   Trophy,
   Code2,
-  BookOpen,
-  Zap,
+  GraduationCap,
 } from "lucide-react";
+import Logo from "../shared/Logo";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+/*
+  AFAQ.brd — the club rendered as a circuit board.
 
-type Activity = {
+  Every activity is a component soldered to the board and routed back to the
+  core (U1, the MCU). Reference designators are not decoration: each activity
+  carries the designator of the component class whose function it mirrors —
+  hackathons are the crystal that sets the clock, training is the regulator
+  that supplies everyone else, competitions are the LED the outside world reads.
+
+  Traces are measured from the live DOM and routed orthogonally with 45° elbows,
+  so the board reflows instead of colliding the way fixed percentages did.
+*/
+
+// ─── Parts list ─────────────────────────────────────────────────────────────
+
+type Side = "L" | "R" | "B";
+
+type Part = {
   id: string;
-  label: string;
-  description: string;
-  details: string;
-  color: string;
+  /** i18n key under `activities` (differs from id for software dev) */
+  key: string;
+  designator: string;
   icon: React.ReactNode;
-  position: { x: number; y: number };
+  /** which edge of the core this part is routed from */
+  side: Side;
+  /** pin index along that edge: 0 = top/left, 1 = middle, 2 = bottom/right */
+  pin: 0 | 1 | 2;
+  /** desktop grid area */
+  area: string;
 };
 
-const activities: Activity[] = [
-  {
-    id: "workshops",
-    label: "Workshops",
-    color: "#FFB454",
-    icon: <Cpu size={30} />,
-    position: { x: 12, y: 10 },
-    description: "Hands-on sessions on Arduino, programming & electronics",
-    details:
-      "Our workshops cover a wide range of topics from Arduino basics to advanced programming concepts. Each session is designed to be hands-on, allowing participants to build real projects and gain practical skills that complement their academic studies.",
-  },
-  {
-    id: "robotics",
-    label: "Robotics",
-    color: "#FF6B6B",
-    icon: <Rocket size={30} />,
-    position: { x: 88, y: 10 },
-    description: "Design, build & program robots for competition",
-    details:
-      "The robotics program brings together students passionate about mechanical design, electronics, and programming. Teams collaborate to build robots for local and national competitions, learning project management and engineering principles along the way.",
-  },
-  {
-    id: "iot",
-    label: "IoT & Electronics",
-    color: "#4C8DFF",
-    icon: <Wifi size={30} />,
-    position: { x: 6, y: 48 },
-    description: "Connected devices & embedded systems",
-    details:
-      "Explore the world of connected devices through our IoT track. Members work with sensors, microcontrollers, and communication protocols to build smart systems that solve real-world problems, from home automation to environmental monitoring.",
-  },
-  {
-    id: "hackathons",
-    label: "Hackathons",
-    color: "#C792EA",
-    icon: <Clock size={30} />,
-    position: { x: 94, y: 48 },
-    description: "Intense coding sprints to solve real problems",
-    details:
-      "Our hackathons bring together students for intense coding sessions where teams build complete solutions in a limited time. These events foster creativity, rapid prototyping, and teamwork while addressing real-world challenges faced by our community.",
-  },
-  {
-    id: "competitions",
-    label: "Competitions",
-    color: "#FFD166",
-    icon: <Trophy size={30} />,
-    position: { x: 12, y: 90 },
-    description: "Friendly contests to showcase skills & win prizes",
-    details:
-      "Regular competitions give members a platform to showcase their talents, from coding challenges to robotics battles. These friendly contests encourage healthy competition, help members benchmark their skills, and build confidence.",
-  },
-  {
-    id: "softwaredev",
-    label: "Software Dev",
-    color: "#FF6FB5",
-    icon: <Code2 size={30} />,
-    position: { x: 88, y: 90 },
-    description: "Web, mobile & systems projects with modern tools",
-    details:
-      "The software development track focuses on building real-world applications using modern frameworks and tools. Members work on web, mobile, and systems projects, learning version control, agile methodologies, and deployment practices used in the industry.",
-  },
-  {
-    id: "training",
-    label: "Training",
-    color: "#2DD4BF",
-    icon: <BookOpen size={30} />,
-    position: { x: 50, y: 97 },
-    description: "Expert-led technical training for all levels",
-    details:
-      "Our training program offers structured learning paths for members at all skill levels. Led by experienced mentors, these sessions cover topics like Python, web development, embedded systems, and AI, ensuring continuous skill development throughout the academic year.",
-  },
+const PARTS: Part[] = [
+  { id: "workshops",    key: "workshops",    designator: "U2",    icon: <Cpu />,           side: "L", pin: 0, area: "a" },
+  { id: "iot",          key: "iot",          designator: "ANT1",  icon: <RadioTower />,    side: "L", pin: 1, area: "b" },
+  { id: "competitions", key: "competitions", designator: "LED1",  icon: <Trophy />,        side: "L", pin: 2, area: "c" },
+  { id: "robotics",     key: "robotics",     designator: "M1",    icon: <Bot />,           side: "R", pin: 0, area: "d" },
+  { id: "hackathons",   key: "hackathons",   designator: "X1",    icon: <Timer />,         side: "R", pin: 1, area: "e" },
+  { id: "softwaredev",  key: "software",     designator: "ROM1",  icon: <Code2 />,         side: "R", pin: 2, area: "f" },
+  { id: "training",     key: "training",     designator: "VREG1", icon: <GraduationCap />, side: "B", pin: 1, area: "g" },
 ];
 
-const CORE_COLOR = "#34E7A6";
+// ─── Trace routing ──────────────────────────────────────────────────────────
 
-// ─── CornerHandles ──────────────────────────────────────────────────────────
+type Pt = { x: number; y: number };
+type Route = { id: string; d: string; vias: Pt[] };
 
-function CornerHandles({
-  color,
-  size = 6,
-  inset = "-4px",
-}: {
-  color: string;
-  size?: number;
-  inset?: string;
-}) {
-  const s = `${size}px`;
-  const shared = {
-    width: s,
-    height: s,
-    borderColor: color,
+const STUB = 14; // escape length before a trace is allowed to turn
+
+/**
+ * Routes A → B the way an autorouter would: a straight escape, one 45° elbow,
+ * then a straight run into the pad. Returns the path plus its via points.
+ */
+function route(a: Pt, b: Pt, outA: Pt, outB: Pt): { d: string; vias: Pt[] } {
+  const p0 = a;
+  const p1 = { x: a.x + outA.x * STUB, y: a.y + outA.y * STUB };
+  const p4 = b;
+  const p3 = { x: b.x + outB.x * STUB, y: b.y + outB.y * STUB };
+
+  const dx = p3.x - p1.x;
+  const dy = p3.y - p1.y;
+  const sx = Math.sign(dx) || 1;
+  const sy = Math.sign(dy) || 1;
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+
+  // Nearly collinear — no elbow needed, run it straight.
+  if (adx < 1 || ady < 1) {
+    return {
+      d: `M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y}`,
+      vias: [],
+    };
+  }
+
+  let e1: Pt;
+  let e2: Pt;
+  if (adx >= ady) {
+    const run = (adx - ady) / 2;
+    e1 = { x: p1.x + sx * run, y: p1.y };
+    e2 = { x: e1.x + sx * ady, y: p1.y + sy * ady };
+  } else {
+    const run = (ady - adx) / 2;
+    e1 = { x: p1.x, y: p1.y + sy * run };
+    e2 = { x: p1.x + sx * adx, y: e1.y + sy * adx };
+  }
+
+  return {
+    d:
+      `M ${p0.x} ${p0.y} L ${p1.x} ${p1.y} ` +
+      `L ${e1.x} ${e1.y} L ${e2.x} ${e2.y} ` +
+      `L ${p3.x} ${p3.y} L ${p4.x} ${p4.y}`,
+    vias: [e1, e2],
   };
-  return (
-    <>
-      <span
-        className="absolute border rounded-sm"
-        style={{ ...shared, top: inset, left: inset }}
-      />
-      <span
-        className="absolute border rounded-sm"
-        style={{ ...shared, top: inset, right: inset }}
-      />
-      <span
-        className="absolute border rounded-sm"
-        style={{ ...shared, bottom: inset, left: inset }}
-      />
-      <span
-        className="absolute border rounded-sm"
-        style={{ ...shared, bottom: inset, right: inset }}
-      />
-    </>
-  );
 }
 
-// ─── CoreNode ───────────────────────────────────────────────────────────────
-
-function CoreNode() {
-  const reduced = useReducedMotion();
-
-  return (
-    <motion.div
-      className="absolute left-1/2 top-1/2 z-20"
-      style={{ transform: "translate(-50%, -50%)" }}
-      animate={
-        reduced
-          ? {}
-          : {
-              boxShadow: [
-                `0 0 18px ${CORE_COLOR}44, 0 0 40px ${CORE_COLOR}22`,
-                `0 0 36px ${CORE_COLOR}88, 0 0 80px ${CORE_COLOR}44, 0 0 120px ${CORE_COLOR}22`,
-                `0 0 18px ${CORE_COLOR}44, 0 0 40px ${CORE_COLOR}22`,
-              ],
-            }
-      }
-      transition={
-        reduced ? {} : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
-      }
-    >
-      <div
-        className="relative w-[150px] h-[150px] border-[1.5px] flex items-center justify-center"
-        style={{
-          borderColor: CORE_COLOR,
-          boxShadow: `0 0 18px ${CORE_COLOR}44`,
-          background: "#0E1012",
-        }}
-      >
-        <CornerHandles color={CORE_COLOR} />
-        <div className="flex flex-col items-center gap-1">
-          <Zap size={28} style={{ color: CORE_COLOR }} />
-          <span
-            className="font-bold text-sm tracking-wider uppercase"
-            style={{ color: CORE_COLOR }}
-          >
-            AFAQ
-          </span>
-        </div>
-      </div>
-    </motion.div>
-  );
+/** Where a trace leaves the core, and which way it escapes. */
+function corePort(box: DOMRect, side: Side, pin: 0 | 1 | 2) {
+  const at = [0.24, 0.5, 0.76][pin];
+  if (side === "L")
+    return { p: { x: box.left, y: box.top + box.height * at }, out: { x: -1, y: 0 } };
+  if (side === "R")
+    return { p: { x: box.right, y: box.top + box.height * at }, out: { x: 1, y: 0 } };
+  return { p: { x: box.left + box.width * 0.5, y: box.bottom }, out: { x: 0, y: 1 } };
 }
 
-// ─── ActivityNode ───────────────────────────────────────────────────────────
+/** Where a trace lands on a part, and which way it escapes. */
+function partPad(box: DOMRect, side: Side) {
+  if (side === "L")
+    return { p: { x: box.right, y: box.top + box.height * 0.5 }, out: { x: 1, y: 0 } };
+  if (side === "R")
+    return { p: { x: box.left, y: box.top + box.height * 0.5 }, out: { x: -1, y: 0 } };
+  return { p: { x: box.left + box.width * 0.5, y: box.top }, out: { x: 0, y: -1 } };
+}
 
-function ActivityNode({
-  activity,
-  index,
-  onClick,
+// ─── Board traces (desktop) ─────────────────────────────────────────────────
+
+function Traces({
+  routes,
+  size,
+  active,
+  drawn,
 }: {
-  activity: Activity;
-  index: number;
-  onClick: () => void;
+  routes: Route[];
+  size: { w: number; h: number };
+  active: string | null;
+  drawn: boolean;
 }) {
   const reduced = useReducedMotion();
-  const boxSize = 104;
-
-  return (
-    <motion.div
-      className="absolute z-10 cursor-pointer"
-      style={{
-        left: `${activity.position.x}%`,
-        top: `${activity.position.y}%`,
-        width: boxSize,
-        height: boxSize,
-        transform: "translate(-50%, -50%)",
-      }}
-      initial={reduced ? {} : { opacity: 0, scale: 0.85 }}
-      animate={reduced ? {} : { opacity: 1, scale: 1 }}
-      whileHover={reduced ? {} : { scale: 1.1 }}
-      whileTap={reduced ? {} : { scale: 0.92 }}
-      transition={{
-        delay: index * 0.07,
-        duration: 0.55,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      onClick={onClick}
-    >
-      <div
-        className="relative w-full h-full rounded flex items-center justify-center"
-        style={{
-          border: `1.5px solid ${activity.color}`,
-          boxShadow: `0 0 18px ${activity.color}33`,
-          background: "#0E1012",
-        }}
-      >
-        <CornerHandles color={activity.color} />
-        <span style={{ color: activity.color }}>{activity.icon}</span>
-      </div>
-
-      <div
-        className="absolute left-1/2 font-mono text-xs whitespace-nowrap"
-        style={{
-          bottom: `calc(100% + 10px)`,
-          transform: "translateX(-50%)",
-          color: activity.color,
-        }}
-      >
-        {activity.label}
-      </div>
-
-      <div
-        className="absolute left-1/2 font-mono text-[10px] text-neutral-500 leading-relaxed text-center"
-        style={{
-          top: `calc(100% + 10px)`,
-          transform: "translateX(-50%)",
-          width: 150,
-        }}
-      >
-        {activity.description}
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Connectors ─────────────────────────────────────────────────────────────
-
-function Connectors({ activities: acts }: { activities: Activity[] }) {
-  const reduced = useReducedMotion();
-  const cx = 50;
-  const cy = 63;
+  if (!size.w || !size.h) return null;
 
   return (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none z-0"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
+      className="absolute inset-0 pointer-events-none"
+      width={size.w}
+      height={size.h}
+      viewBox={`0 0 ${size.w} ${size.h}`}
+      aria-hidden="true"
+      style={{ overflow: "visible" }}
     >
-      <defs>
-        {acts.map((a) => {
-          const px = a.position.x;
-          const py = a.position.y;
-          return (
-            <linearGradient
-              key={a.id}
-              id={`grad-${a.id}`}
-              gradientUnits="userSpaceOnUse"
-              x1={cx}
-              y1={cy}
-              x2={px}
-              y2={py}
-            >
-              <stop offset="0%" stopColor={CORE_COLOR} />
-              <stop offset="100%" stopColor={a.color} />
-            </linearGradient>
-          );
-        })}
-      </defs>
-
-      {acts.map((a) => {
-        const px = a.position.x;
-        const py = a.position.y;
-        const dx = px - cx;
-        const dy = py - cy;
-        const cp1x = cx + dx * 0.2;
-        const cp1y = cy + dy * 0.4;
-        const cp2x = px - dx * 0.2;
-        const cp2y = py - dy * 0.4;
-        const d = `M ${cx} ${cy} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${px} ${py}`;
-
+      {routes.map((r, i) => {
+        const isActive = active === r.id;
         return (
-          <motion.path
-            key={a.id}
-            d={d}
-            fill="none"
-            stroke={`url(#grad-${a.id})`}
-            strokeWidth={0.5}
-            strokeDasharray="3 5"
-            opacity={0.7}
-            initial={reduced ? {} : { strokeDashoffset: 0 }}
-            animate={reduced ? {} : { strokeDashoffset: -16 }}
-            transition={
-              reduced ? {} : { duration: 0.8, repeat: Infinity, ease: "linear" }
-            }
-          />
+          <g key={r.id}>
+            <motion.path
+              d={r.d}
+              fill="none"
+              stroke="var(--color-accent)"
+              strokeWidth={isActive ? 2 : 1.25}
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+              style={{ opacity: isActive ? 0.95 : 0.34 }}
+              initial={reduced ? false : { pathLength: 0 }}
+              animate={reduced ? false : { pathLength: drawn ? 1 : 0 }}
+              transition={
+                reduced
+                  ? undefined
+                  : { duration: 0.7, delay: i * 0.09, ease: [0.22, 1, 0.36, 1] }
+              }
+            />
+
+            {/* Vias at each elbow — the board's own punctuation */}
+            {r.vias.map((v, vi) => (
+              <circle
+                key={vi}
+                cx={v.x}
+                cy={v.y}
+                r={isActive ? 3 : 2.5}
+                fill="var(--color-bg)"
+                stroke="var(--color-accent)"
+                strokeWidth={1.25}
+                style={{
+                  opacity: drawn ? (isActive ? 1 : 0.42) : 0,
+                  transition: "opacity 0.3s ease",
+                }}
+              />
+            ))}
+
+            {/* Current pulse — the one animated moment on the board */}
+            {isActive && !reduced && (
+              <motion.path
+                d={r.d}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth={3.5}
+                strokeLinecap="round"
+                pathLength={1}
+                strokeDasharray="0.08 0.92"
+                initial={{ strokeDashoffset: 1 }}
+                animate={{ strokeDashoffset: 0 }}
+                transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
+              />
+            )}
+          </g>
         );
       })}
     </svg>
   );
 }
 
-// ─── NodePopup ──────────────────────────────────────────────────────────────
+// ─── Core (U1) ──────────────────────────────────────────────────────────────
 
-function NodePopup({
-  activity,
-  onClose,
+const PIN_ROWS = [0.24, 0.5, 0.76];
+
+function Core({ innerRef }: { innerRef: React.Ref<HTMLDivElement> }) {
+  return (
+    <div
+      ref={innerRef}
+      className="relative flex flex-col items-center justify-center"
+      style={{
+        width: "100%",
+        maxWidth: 210,
+        aspectRatio: "1 / 1",
+        margin: "0 auto",
+        background: "var(--color-card)",
+        border: "1.5px solid var(--color-accent)",
+        borderRadius: 16,
+        boxShadow: "0 10px 34px rgba(36,96,231,0.14)",
+      }}
+    >
+      {/* Chip pins */}
+      {PIN_ROWS.map((at) => (
+        <React.Fragment key={at}>
+          <span className="afaq-pin" style={{ left: -7, top: `calc(${at * 100}% - 4px)` }} />
+          <span className="afaq-pin" style={{ right: -7, top: `calc(${at * 100}% - 4px)` }} />
+        </React.Fragment>
+      ))}
+      <span
+        className="afaq-pin"
+        style={{ bottom: -7, left: "calc(50% - 4px)", width: 8, height: 7 }}
+      />
+
+      {/* Pin-1 indicator, exactly as it is silkscreened on a real package */}
+      <span
+        className="absolute rounded-full"
+        style={{
+          top: 12,
+          insetInlineStart: 12,
+          width: 7,
+          height: 7,
+          border: "1.5px solid var(--color-accent)",
+        }}
+      />
+
+      <Logo size={54} />
+      <div className="label-text mt-3" style={{ color: "var(--color-text)" }}>
+        AFAQ
+      </div>
+      <div
+        className="afaq-desig mt-1"
+        style={{ color: "var(--color-accent)", opacity: 0.75 }}
+      >
+        U1 · CORE
+      </div>
+    </div>
+  );
+}
+
+// ─── Component block ────────────────────────────────────────────────────────
+
+function PartBlock({
+  part,
+  label,
+  caption,
+  selected,
+  active,
+  onSelect,
+  onActivate,
+  onDeactivate,
+  innerRef,
+  index,
 }: {
-  activity: Activity;
-  onClose: () => void;
+  part: Part;
+  label: string;
+  caption: string;
+  selected: boolean;
+  active: boolean;
+  onSelect: () => void;
+  onActivate: () => void;
+  onDeactivate: () => void;
+  innerRef: (el: HTMLButtonElement | null) => void;
+  index: number;
 }) {
   const reduced = useReducedMotion();
+
+  return (
+    <motion.button
+      ref={innerRef}
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      onMouseEnter={onActivate}
+      onMouseLeave={onDeactivate}
+      onFocus={onActivate}
+      onBlur={onDeactivate}
+      className={`afaq-part ${active ? "is-active" : ""} ${selected ? "is-selected" : ""}`}
+      initial={reduced ? false : { opacity: 0, y: 12 }}
+      whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={
+        reduced
+          ? undefined
+          : { duration: 0.5, delay: 0.15 + index * 0.06, ease: [0.22, 1, 0.36, 1] }
+      }
+    >
+      <span className="afaq-part-head">
+        <span className="afaq-part-icon" aria-hidden="true">
+          {React.cloneElement(part.icon as React.ReactElement, { size: 18 })}
+        </span>
+        <span className="afaq-desig">{part.designator}</span>
+      </span>
+      <span className="afaq-part-label">{label}</span>
+      <span className="afaq-part-caption">{caption}</span>
+    </motion.button>
+  );
+}
+
+// ─── Datasheet ──────────────────────────────────────────────────────────────
+
+function Datasheet({
+  part,
+  label,
+  details,
+  onClose,
+  closeLabel,
+}: {
+  part: Part;
+  label: string;
+  details: string;
+  onClose: () => void;
+  closeLabel: string;
+}) {
+  const reduced = useReducedMotion();
+
+  return (
+    <motion.div
+      key={part.id}
+      initial={reduced ? false : { opacity: 0, height: 0 }}
+      animate={reduced ? undefined : { opacity: 1, height: "auto" }}
+      exit={reduced ? undefined : { opacity: 0, height: 0 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      style={{ overflow: "hidden" }}
+    >
+      <div className="afaq-datasheet">
+        <div className="afaq-datasheet-rule" aria-hidden="true" />
+        <div className="afaq-datasheet-body">
+          <div className="afaq-datasheet-meta">
+            <span className="afaq-part-icon" aria-hidden="true">
+              {React.cloneElement(part.icon as React.ReactElement, { size: 20 })}
+            </span>
+            <span className="afaq-desig" style={{ color: "var(--color-accent)" }}>
+              {part.designator}
+            </span>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <h3 className="text-xl font-bold" style={{ marginBottom: 6 }}>
+              {label}
+            </h3>
+            <p
+              className="body-text text-sm md:text-base"
+              style={{ color: "var(--color-text-muted)", margin: 0 }}
+            >
+              {details}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="afaq-close">
+            {closeLabel}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Board (desktop) ────────────────────────────────────────────────────────
+
+function Board({
+  parts,
+  labels,
+  captions,
+  selected,
+  hovered,
+  setHovered,
+  onSelect,
+}: {
+  parts: Part[];
+  labels: Record<string, string>;
+  captions: Record<string, string>;
+  selected: string | null;
+  hovered: string | null;
+  setHovered: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}) {
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const coreRef = useRef<HTMLDivElement | null>(null);
+  const partRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [drawn, setDrawn] = useState(false);
+
+  const measure = useCallback(() => {
+    const board = boardRef.current;
+    const core = coreRef.current;
+    if (!board || !core) return;
+
+    const b = board.getBoundingClientRect();
+    if (!b.width) return;
+    const rel = (r: DOMRect) =>
+      new DOMRect(r.left - b.left, r.top - b.top, r.width, r.height);
+    const coreBox = rel(core.getBoundingClientRect());
+
+    const next: Route[] = [];
+    for (const part of parts) {
+      const el = partRefs.current[part.id];
+      if (!el) continue;
+      const box = rel(el.getBoundingClientRect());
+      const from = corePort(coreBox, part.side, part.pin);
+      const to = partPad(box, part.side);
+      const { d, vias } = route(from.p, to.p, from.out, to.out);
+      next.push({ id: part.id, d, vias });
+    }
+
+    setSize({ w: b.width, h: b.height });
+    setRoutes(next);
+  }, [parts]);
+
+  useLayoutEffect(() => {
+    measure();
+    const board = boardRef.current;
+    if (!board || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(board);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  // Labels change length across locales; re-route once webfonts settle.
+  useEffect(() => {
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+    fonts?.ready.then(measure).catch(() => {});
+  }, [measure]);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+    const board = boardRef.current;
+    if (!board || typeof IntersectionObserver === "undefined") {
+      setDrawn(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setDrawn(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    io.observe(board);
+    return () => io.disconnect();
+  }, []);
+
+  const active = hovered ?? selected;
 
   return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+    <div className="afaq-board hidden md:block" ref={boardRef}>
+      <span className="afaq-drill" style={{ top: 14, left: 14 }} />
+      <span className="afaq-drill" style={{ top: 14, right: 14 }} />
+      <span className="afaq-drill" style={{ bottom: 14, left: 14 }} />
+      <span className="afaq-drill" style={{ bottom: 14, right: 14 }} />
 
-      <motion.div
-        className="relative"
-        initial={reduced ? {} : { scale: 0.7, opacity: 0 }}
-        animate={reduced ? {} : { scale: 1, opacity: 1 }}
-        exit={reduced ? {} : { scale: 0.7, opacity: 0 }}
-        transition={
-          reduced ? {} : { type: "spring", damping: 14, stiffness: 260 }
-        }
-      >
-        <div
-          className="relative p-8 rounded-2xl border-[1.5px]"
-          style={{
-            borderColor: activity.color,
-            boxShadow: `0 0 30px ${activity.color}44, 0 0 60px ${activity.color}22`,
-            background: "#0E1012",
-            width: 400,
-            maxWidth: "90vw",
-          }}
-        >
-          <CornerHandles color={activity.color} />
+      <Traces routes={routes} size={size} active={active} drawn={drawn} />
 
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full border border-neutral-700 text-neutral-500 hover:text-white hover:border-neutral-500 transition-colors text-sm"
-          >
-            ✕
-          </button>
-
-          <div className="mb-5" style={{ color: activity.color }}>
-            {React.cloneElement(activity.icon as React.ReactElement, {
-              size: 36,
-            })}
-          </div>
-
-          <h3
-            className="font-mono text-lg font-bold mb-3"
-            style={{ color: activity.color }}
-          >
-            {activity.label}
-          </h3>
-
-          <p className="font-mono text-sm text-neutral-400 leading-relaxed">
-            {activity.details}
-          </p>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ─── DiagramDesktop ─────────────────────────────────────────────────────────
-
-function DiagramDesktop({
-  activities: acts,
-  onNodeClick,
-  title,
-  sub,
-}: {
-  activities: Activity[];
-  onNodeClick: (a: Activity) => void;
-  title: string;
-  sub: string;
-}) {
-  return (
-    <div className="hidden md:block">
-      <div className="text-center mb-10">
-        <h2 className="font-sans font-bold text-4xl text-white mb-2">
-          {title}
-        </h2>
-        <p className="font-mono text-sm text-neutral-400">{sub}</p>
-      </div>
-
-      <div
-        className="relative mx-auto w-full rounded-2xl"
-        style={{
-          minHeight: 500,
-          backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
-        }}
-      >
-        <Connectors activities={acts} />
-        <CoreNode />
-        {acts.map((a, i) => (
-          <ActivityNode
-            key={a.id}
-            activity={a}
-            index={i}
-            onClick={() => onNodeClick(a)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── DiagramMobile ──────────────────────────────────────────────────────────
-
-function MobileRow({
-  activity,
-  index,
-  onClick,
-  isCore,
-}: {
-  activity: Activity;
-  index: number;
-  onClick?: () => void;
-  isCore?: boolean;
-}) {
-  const reduced = useReducedMotion();
-  const c = isCore ? CORE_COLOR : activity.color;
-  const pulseAnim = isCore && !reduced;
-
-  return (
-    <motion.div
-      className={`relative flex items-center ${
-        onClick ? "cursor-pointer" : ""
-      }`}
-      style={{ minHeight: isCore ? 80 : 76 }}
-      initial={reduced ? {} : { opacity: 0, x: -8 }}
-      whileInView={reduced ? {} : { opacity: 1, x: 0 }}
-      viewport={{ once: true }}
-      whileTap={onClick && !reduced ? { scale: 0.97 } : {}}
-      transition={{
-        delay: index * 0.05,
-        duration: 0.5,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      onClick={onClick}
-    >
-      {/* Horizontal branch line — matches .m-row::before */}
-      <div
-        className="absolute top-1/2 h-[1.5px] -translate-y-1/2 pointer-events-none z-0"
-        style={{
-          left: -16,
-          width: 16,
-          background: `linear-gradient(to right, ${CORE_COLOR}, ${c})`,
-        }}
-      />
-
-      {/* Joint dot at trunk — matches .m-dot.d-trunk */}
-      <span
-        className="absolute w-[5px] h-[5px] rounded-full top-1/2 -translate-y-1/2 z-10 pointer-events-none"
-        style={{
-          left: -15.5,
-          border: `1.3px solid ${CORE_COLOR}`,
-          background: "#0a0b0d",
-        }}
-      />
-
-      {/* Joint dot at card — matches .m-dot.d-card */}
-      <span
-        className="absolute w-[5px] h-[5px] rounded-full top-1/2 -translate-y-1/2 z-10 pointer-events-none"
-        style={{
-          left: -2.5,
-          border: `1.3px solid ${c}`,
-          background: "#0a0b0d",
-        }}
-      />
-
-      {/* Card — matches .m-card */}
-      <motion.div
-        className="flex-1 min-w-0 flex items-center gap-[10px] rounded-[4px] px-3 py-[10px]"
-        style={{
-          border: `1.5px solid ${c}`,
-          background: isCore ? "rgba(52,231,166,0.08)" : "#0f1113",
-          boxShadow: `0 0 14px ${c}48`,
-        }}
-        animate={
-          pulseAnim
-            ? {
-                boxShadow: [
-                  `0 0 26px ${CORE_COLOR}38`,
-                  `0 0 46px ${CORE_COLOR}66`,
-                  `0 0 26px ${CORE_COLOR}38`,
-                ],
-              }
-            : {}
-        }
-        transition={
-          pulseAnim
-            ? { duration: 2.8, repeat: Infinity, ease: "easeInOut" }
-            : {}
-        }
-      >
-        {/* Icon box — matches .m-icon */}
-        <div
-          className="relative w-[34px] h-[34px] shrink-0 flex items-center justify-center rounded-[4px]"
-          style={{
-            border: `1.3px solid ${c}`,
-            background: isCore ? "transparent" : "#0f1113",
-          }}
-        >
-          <CornerHandles color={c} size={5} inset="-3.5px" />
-          <span style={{ color: c }}>
-            {React.cloneElement(activity.icon as React.ReactElement, {
-              size: 16,
-            })}
-          </span>
-        </div>
-
-        {/* Text — matches .m-text */}
-        <div className="min-w-0">
+      <div className="afaq-grid" onMouseLeave={() => setHovered(null)}>
+        {parts.map((part, i) => (
           <div
-            className="font-mono text-[11px] font-medium tracking-[0.02em]"
-            style={{ color: c }}
+            key={part.id}
+            data-side={part.side}
+            style={{ gridArea: part.area, minWidth: 0 }}
           >
-            {activity.label}
-          </div>
-          <div
-            className={`font-mono leading-[1.42] text-[#6b7178] ${
-              isCore ? "text-[9px] tracking-[0.05em] uppercase" : "text-[10px]"
-            }`}
-          >
-            {activity.description}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function DiagramMobile({
-  activities: acts,
-  onNodeClick,
-  title,
-  sub,
-}: {
-  activities: Activity[];
-  onNodeClick: (a: Activity) => void;
-  title: string;
-  sub: string;
-}) {
-  const { t } = useTranslation("home");
-
-  const hubActivity: Activity = {
-    id: "hub",
-    label: "AFAQ",
-    description: t("activities.core"),
-    details: "",
-    color: CORE_COLOR,
-    icon: <Zap size={16} />,
-    position: { x: 0, y: 0 },
-  };
-
-  return (
-    <div className="md:hidden">
-      <div className="text-center mb-[26px]">
-        <h2 className="font-sans font-bold text-[32px] text-white mb-[14px]">
-          {title}
-        </h2>
-        <p className="font-mono text-sm text-neutral-400 max-w-[460px] mx-auto leading-relaxed">
-          {sub}
-        </p>
-      </div>
-
-      {/* Mobile list container */}
-      <div
-        className="relative mx-auto"
-        style={{
-          maxWidth: 360,
-          paddingLeft: 28,
-        }}
-      >
-        {/* Vertical trunk line — matches .mobile-list::before */}
-        <div
-          className="absolute w-[2px] pointer-events-none"
-          style={{
-            left: 12,
-            top: 38,
-            bottom: 38,
-            opacity: 0.6,
-            background: `linear-gradient(to bottom, ${CORE_COLOR}, #33373d 92%, transparent)`,
-          }}
-        />
-
-        <div className="space-y-2">
-          <MobileRow activity={hubActivity} index={0} isCore />
-          {acts.map((a, i) => (
-            <MobileRow
-              key={a.id}
-              activity={a}
-              index={i + 1}
-              onClick={() => onNodeClick(a)}
+            <PartBlock
+              part={part}
+              index={i}
+              label={labels[part.id]}
+              caption={captions[part.id]}
+              selected={selected === part.id}
+              active={active === part.id}
+              onSelect={() => onSelect(part.id)}
+              onActivate={() => setHovered(part.id)}
+              onDeactivate={() => setHovered(null)}
+              innerRef={(el) => {
+                partRefs.current[part.id] = el;
+              }}
             />
-          ))}
+          </div>
+        ))}
+        <div style={{ gridArea: "core", alignSelf: "center" }}>
+          <Core innerRef={coreRef} />
         </div>
+      </div>
+
+      <div className="afaq-silk">
+        <span>AFAQ.BRD</span>
+        <span className="afaq-silk-sep" aria-hidden="true" />
+        <span>{parts.length} MODULES · 1 CORE</span>
       </div>
     </div>
   );
 }
 
-// ─── ActivitiesDiagram (exported) ───────────────────────────────────────────
+// ─── Bus (mobile) ───────────────────────────────────────────────────────────
+
+function Bus({
+  parts,
+  labels,
+  captions,
+  selected,
+  onSelect,
+}: {
+  parts: Part[];
+  labels: Record<string, string>;
+  captions: Record<string, string>;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="afaq-bus md:hidden">
+      <div className="afaq-bus-line" aria-hidden="true" />
+
+      <div className="afaq-bus-core">
+        <div className="afaq-bus-branch afaq-bus-branch--core" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="20" height="20">
+            <path
+              d="M 1 1 L 1 10 L 20 10"
+              fill="none"
+              stroke="var(--color-accent)"
+              strokeWidth={1.5}
+              opacity={0.5}
+            />
+          </svg>
+        </div>
+        <Logo size={30} />
+        <div>
+          <div className="afaq-part-label">AFAQ</div>
+          <div className="afaq-desig" style={{ color: "var(--color-accent)" }}>
+            U1 · CORE
+          </div>
+        </div>
+      </div>
+
+      {parts.map((part) => (
+        <button
+          key={part.id}
+          type="button"
+          aria-pressed={selected === part.id}
+          onClick={() => onSelect(part.id)}
+          className={`afaq-part afaq-bus-part ${selected === part.id ? "is-selected" : ""}`}
+        >
+          <span className="afaq-bus-branch" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="20" height="20">
+              <path
+                d="M 1 1 L 10 10 L 20 10"
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth={1.5}
+                opacity={0.5}
+              />
+            </svg>
+          </span>
+          <span className="afaq-part-head">
+            <span className="afaq-part-icon" aria-hidden="true">
+              {React.cloneElement(part.icon as React.ReactElement, { size: 17 })}
+            </span>
+            <span className="afaq-desig">{part.designator}</span>
+          </span>
+          <span className="afaq-part-label">{labels[part.id]}</span>
+          <span className="afaq-part-caption">{captions[part.id]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Section ────────────────────────────────────────────────────────────────
 
 export default function ActivitiesDiagram() {
   const { t } = useTranslation("home");
-  const [selected, setSelected] = useState<Activity | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
 
-  const localeKey = useCallback(
-    (id: string) => (id === "softwaredev" ? "software" : id),
+  const labels = useMemo(
+    () =>
+      Object.fromEntries(
+        PARTS.map((p) => [p.id, t(`activities.${p.key}.title`)])
+      ) as Record<string, string>,
+    [t]
+  );
+  const captions = useMemo(
+    () =>
+      Object.fromEntries(
+        PARTS.map((p) => [p.id, t(`activities.${p.key}.desc`)])
+      ) as Record<string, string>,
+    [t]
+  );
+
+  const toggle = useCallback(
+    (id: string) => setSelected((cur) => (cur === id ? null : id)),
     []
   );
 
-  const translated = useMemo(
-    () =>
-      activities.map((a) => ({
-        ...a,
-        label: t(`activities.${localeKey(a.id)}.title`),
-        description: t(`activities.${localeKey(a.id)}.desc`),
-        details: t(`activities.${localeKey(a.id)}.details`),
-      })),
-    [t, localeKey]
-  );
-
-  const handleNodeClick = useCallback((a: Activity) => setSelected(a), []);
-  const handleClose = useCallback(() => setSelected(null), []);
+  const openPart = selected ? PARTS.find((p) => p.id === selected) : null;
 
   return (
-    <section className="py-16 md:py-20 px-4">
-      <div className="max-w-5xl mx-auto">
-        <AnimatePresence>
-          {selected && (
-            <NodePopup key="popup" activity={selected} onClose={handleClose} />
+    <section className="py-16 md:py-20 relative z-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-30px" }}
+          transition={{ type: "spring", damping: 28, stiffness: 120 }}
+          className="text-center mb-12 md:mb-16"
+        >
+          <div className="eyebrow eyebrow-center mb-4">AFAQ.BRD</div>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight">
+            {t("activities.title")}
+          </h2>
+          <p
+            className="mt-4 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {t("activities.sub")}
+          </p>
+        </motion.div>
+
+        <Board
+          parts={PARTS}
+          labels={labels}
+          captions={captions}
+          selected={selected}
+          hovered={hovered}
+          setHovered={setHovered}
+          onSelect={toggle}
+        />
+
+        <Bus
+          parts={PARTS}
+          labels={labels}
+          captions={captions}
+          selected={selected}
+          onSelect={toggle}
+        />
+
+        <AnimatePresence initial={false} mode="wait">
+          {openPart && (
+            <Datasheet
+              part={openPart}
+              label={labels[openPart.id]}
+              details={t(`activities.${openPart.key}.details`)}
+              closeLabel={t("activities.close")}
+              onClose={() => setSelected(null)}
+            />
           )}
         </AnimatePresence>
-
-        <DiagramDesktop
-          activities={translated}
-          onNodeClick={handleNodeClick}
-          title={t("activities.title")}
-          sub={t("activities.sub")}
-        />
-        <DiagramMobile
-          activities={translated}
-          onNodeClick={handleNodeClick}
-          title={t("activities.title")}
-          sub={t("activities.sub")}
-        />
       </div>
     </section>
   );

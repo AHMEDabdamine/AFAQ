@@ -49,7 +49,8 @@
       "desc": "Expert-led workshops and technical training sessions for all levels.",
       "details": "Our training program offers structured learning paths for members at all skill levels. Led by experienced mentors, these sessions cover topics like Python, web development, embedded systems, and AI."
     },
-    "core": "core"
+    "core": "core",
+    "close": "Close"
   },
   "upcomingEvents": {
     "title": "Upcoming Events",

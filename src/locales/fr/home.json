@@ -49,7 +49,8 @@
       "desc": "Ateliers animés par des experts et sessions de formation technique.",
       "details": "Notre programme de formation offre des parcours d'apprentissage structurés pour tous les niveaux. Animées par des mentors expérimentés, ces sessions couvrent Python, le développement web, les systèmes embarqués et l'IA."
     },
-    "core": "noyau"
+    "core": "noyau",
+    "close": "Fermer"
   },
   "upcomingEvents": {
     "title": "Évenements a Venir",

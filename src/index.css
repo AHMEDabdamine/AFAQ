@@ -1317,3 +1317,347 @@ select.form-input {
   font-size: 0.75rem !important;
   padding: 0.25rem 0.625rem !important;
 }
+
+/* ══ AFAQ.BRD — activities board ═══════════════════════════════════════════
+   The club drawn as a circuit board: silkscreen on paper, one accent, traces
+   routed in SVG from measured DOM positions. All color comes from tokens so
+   the board follows light/dark without a second palette. */
+
+.afaq-board {
+  position: relative;
+  padding: 40px 28px 34px;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: 22px;
+  background: var(--color-bg-alt);
+  background-image: radial-gradient(
+    circle,
+    rgba(36, 96, 231, 0.13) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+/* Mounting holes, one per corner */
+.afaq-drill {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-bg);
+  pointer-events: none;
+}
+
+.afaq-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-areas:
+    "a  .     d"
+    "b  core  e"
+    "c  .     f"
+    ".  g     .";
+  column-gap: clamp(28px, 6vw, 76px);
+  row-gap: 18px;
+  align-items: center;
+}
+
+/* ── Component blocks ── */
+
+.afaq-part {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: start;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: 14px;
+  background: var(--color-card);
+  cursor: pointer;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.afaq-part:hover,
+.afaq-part.is-active,
+.afaq-part.is-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 6px 22px rgba(36, 96, 231, 0.13);
+}
+
+.afaq-part:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Solder pad on the edge that faces the core */
+.afaq-part::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 5px);
+  width: 9px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  opacity: 0.28;
+  transition: opacity 0.25s ease;
+}
+
+.afaq-part.is-active::after,
+.afaq-part.is-selected::after {
+  opacity: 1;
+}
+
+/* The pad sits on whichever edge the trace arrives at. Logical properties:
+   the grid mirrors in RTL, so the pad has to follow it inward. */
+[data-side="L"] .afaq-part::after {
+  inset-inline-end: -5px;
+}
+
+[data-side="R"] .afaq-part::after {
+  inset-inline-start: -5px;
+}
+
+[data-side="B"] .afaq-part::after {
+  top: -5px;
+  inset-inline-start: calc(50% - 5px);
+  width: 10px;
+  height: 9px;
+}
+
+.afaq-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.afaq-part-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.afaq-part:hover .afaq-part-icon,
+.afaq-part.is-active .afaq-part-icon,
+.afaq-part.is-selected .afaq-part-icon {
+  color: #fff;
+  background: var(--color-accent);
+}
+
+.afaq-part-label {
+  font-family: "Minecraft", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.afaq-part-caption {
+  font-family: "Minecraft", system-ui, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/* Reference designator — silkscreen type. Printed on the board, not prose,
+   so it is not selectable. */
+.afaq-desig {
+  user-select: none;
+  font-family: "Minecraft", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  /* Silkscreen is printed on the board, so it stays LTR in Arabic too */
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Chip pins on the core package */
+.afaq-pin {
+  position: absolute;
+  width: 7px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  opacity: 0.55;
+}
+
+/* ── Board footer silkscreen ── */
+
+.afaq-silk {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 30px;
+  font-family: "Minecraft", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  opacity: 0.65;
+  user-select: none;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.afaq-silk-sep {
+  width: 16px;
+  height: 1.5px;
+  background: var(--color-border);
+}
+
+/* ── Datasheet ── */
+
+.afaq-datasheet {
+  padding-top: 22px;
+}
+
+.afaq-datasheet-rule {
+  height: 1.5px;
+  margin-bottom: 22px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--color-accent) 0 8px,
+    transparent 8px 15px
+  );
+  opacity: 0.4;
+}
+
+.afaq-datasheet-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: 18px;
+  background: var(--color-card);
+}
+
+.afaq-datasheet-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.afaq-close {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  padding: 7px 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 100px;
+  background: transparent;
+  font-family: "Minecraft", system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.afaq-close:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Mobile bus ── */
+
+.afaq-bus {
+  position: relative;
+  padding-inline-start: 30px;
+}
+
+.afaq-bus-line {
+  position: absolute;
+  inset-inline-start: 9px;
+  top: 30px;
+  bottom: 34px;
+  width: 1.5px;
+  background: var(--color-accent);
+  opacity: 0.4;
+}
+
+.afaq-bus-core {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 14px;
+  background: var(--color-card);
+}
+
+.afaq-bus-part {
+  margin-bottom: 10px;
+}
+
+.afaq-bus-part::after {
+  display: none;
+}
+
+.afaq-bus-branch {
+  position: absolute;
+  inset-inline-start: -21px;
+  top: calc(50% - 10px);
+  width: 20px;
+  height: 20px;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.afaq-bus-branch--core {
+  top: calc(50% - 10px);
+}
+
+/* Branch elbows mirror with the writing direction */
+[dir="rtl"] .afaq-bus-branch {
+  transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afaq-part {
+    transition: none;
+  }
+}
+
+/* ══ Footer wordmark ═══════════════════════════════════════════════════════
+   The animated AFAQ wordmark keeps one grotesque at every breakpoint and in
+   every locale. The font is pinned on the <text> nodes themselves rather than
+   inherited from the <svg>, because the site's `body` face and the RTL
+   `[dir="rtl"] body *` override are both !important and would otherwise win —
+   an inline style loses to an !important declaration. The stack ends in a
+   generic so Android, which ships no Helvetica or Arial, still resolves a
+   grotesque instead of falling through to the pixel face. */
+
+.afaq-wordmark,
+.afaq-wordmark text,
+.afaq-wordmark tspan,
+[dir="rtl"] .afaq-wordmark,
+[dir="rtl"] .afaq-wordmark text,
+[dir="rtl"] .afaq-wordmark tspan {
+  font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans",
+    "Nimbus Sans", "Segoe UI", Roboto, sans-serif !important;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
