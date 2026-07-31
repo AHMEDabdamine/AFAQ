@@ -160,7 +160,7 @@ export default function Registration() {
       <section className="py-16 md:py-20 -mt-12 relative z-0">
         <SideImage side="right" />
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="card-pro p-8 md:p-10">
+          <div className="card-pro card-static p-8 md:p-10">
             {status === 'success' ? (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}

@@ -1,5 +1,6 @@
 // Progres MESRS auto-fill integration
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation, Trans } from "react-i18next";
 import useProgresAuth from "../../hooks/useProgresAuth";
 
@@ -110,7 +111,7 @@ export default function ProgresButton({ onSuccess }) {
         {t("progres.button")}
       </button>
 
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div
           style={{
             position: "fixed",
@@ -130,7 +131,7 @@ export default function ProgresButton({ onSuccess }) {
             role="dialog"
             aria-modal="true"
             aria-label="Sign in with Progres"
-            className="card-pro"
+            className="card-pro card-static"
             style={{
               width: "100%",
               maxWidth: 420,
@@ -276,7 +277,8 @@ export default function ProgresButton({ onSuccess }) {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`

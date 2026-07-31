@@ -538,6 +538,20 @@ h5,
   border-color: rgba(36, 96, 231, 0.18);
 }
 
+/* Non-interactive containers (forms, dialogs): no lift, no clipping.
+   A transform on the card would also make it the containing block for any
+   position: fixed descendant, which breaks modals rendered inside it. */
+.card-pro.card-static {
+  overflow: visible;
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.card-pro.card-static:hover {
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-color: rgba(36, 96, 231, 0.1);
+}
+
 /* Card image gradient overlay */
 .card-image-overlay {
   position: relative;
