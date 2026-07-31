@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { X, Send, Trash2, RefreshCw, StopCircle } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import SuggestedQuestions from "./SuggestedQuestions";
@@ -31,6 +32,7 @@ function saveHistory(messages) {
 // inside the bubble when content is actively streaming.
 
 export default function ChatbotModal({ open, onClose }) {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState(loadHistory);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,18 @@ export default function ChatbotModal({ open, onClose }) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [open]);
+
+  // Escape closes the panel; it previously had no keyboard exit at all. This
+  // is a docked assistant rather than a blocking dialog, so focus is placed
+  // inside on open but deliberately not trapped.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   const scrollToBottom = useCallback(() => {
     if (listRef.current) {
@@ -230,7 +244,9 @@ export default function ChatbotModal({ open, onClose }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.93, y: 16 }}
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="fixed z-[101] bottom-0 right-0 md:bottom-24 md:right-6 w-full md:w-96 max-h-[92dvh] md:max-h-[600px] md:h-[600px] flex flex-col rounded-t-2xl md:rounded-2xl overflow-hidden shadow-2xl border"
+            role="dialog"
+            aria-label={t("chat.title", "AFAQ Assistant")}
+            className="fixed z-[101] bottom-0 end-0 md:bottom-24 md:end-6 w-full md:w-96 max-h-[92dvh] md:max-h-[600px] md:h-[600px] flex flex-col rounded-t-2xl md:rounded-2xl overflow-hidden shadow-2xl border"
             style={{
               background: "var(--color-card)",
               borderColor: "var(--color-border-light)",
@@ -251,7 +267,7 @@ export default function ChatbotModal({ open, onClose }) {
                 >
                   <img
                     src="/images/ai/pfp.webp"
-                    alt="AI"
+                    alt="" aria-hidden="true"
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -276,16 +292,8 @@ export default function ChatbotModal({ open, onClose }) {
                       style={{ color: "var(--color-text-muted)" }}
                     >
                       {loading
-                        ? lang === "ar"
-                          ? "يكتب…"
-                          : lang === "fr"
-                          ? "En train d'écrire…"
-                          : "Typing…"
-                        : lang === "ar"
-                        ? "متصل"
-                        : lang === "fr"
-                        ? "En ligne"
-                        : "Online"}
+                        ? t("chat.typing", "Typing…")
+                        : t("chat.online", "Online")}
                     </span>
                   </span>
                 </div>
@@ -297,23 +305,21 @@ export default function ChatbotModal({ open, onClose }) {
                     onClick={clearHistory}
                     className="p-2 rounded-xl hover:opacity-70 transition-opacity cursor-pointer"
                     style={{ color: "var(--color-text-muted)" }}
-                    title={
-                      lang === "ar"
-                        ? "مسح"
-                        : lang === "fr"
-                        ? "Effacer"
-                        : "Clear"
-                    }
+                    type="button"
+                    title={t("chat.clear", "Clear conversation")}
+                    aria-label={t("chat.clear", "Clear conversation")}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={onClose}
                   className="p-2 rounded-xl hover:opacity-70 transition-opacity cursor-pointer"
                   style={{ color: "var(--color-text-muted)" }}
+                  aria-label={t("chat.close", "Close chat")}
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -323,6 +329,9 @@ export default function ChatbotModal({ open, onClose }) {
               ref={listRef}
               className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4 scroll-smooth"
               style={{ background: "var(--color-bg)" }}
+              role="log"
+              aria-live="polite"
+              aria-label={t("chat.transcript", "Conversation")}
             >
               {/* Empty state */}
               {messages.length === 0 && (
@@ -333,7 +342,7 @@ export default function ChatbotModal({ open, onClose }) {
                   >
                     <img
                       src="/images/ai/pfp.webp"
-                      alt="AI"
+                      alt="" aria-hidden="true"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -342,21 +351,13 @@ export default function ChatbotModal({ open, onClose }) {
                       className="text-sm font-medium mb-1"
                       style={{ color: "var(--color-text)" }}
                     >
-                      {lang === "ar"
-                        ? "مرحباً! كيف يمكنني مساعدتك؟"
-                        : lang === "fr"
-                        ? "Bonjour ! Comment puis-je vous aider ?"
-                        : "Hi! How can I help you?"}
+                      {t("chat.greeting", "Hi! How can I help you?")}
                     </p>
                     <p
                       className="text-xs"
                       style={{ color: "var(--color-text-muted)" }}
                     >
-                      {lang === "ar"
-                        ? "اطرح سؤالاً عن النادي"
-                        : lang === "fr"
-                        ? "Posez une question sur le club"
-                        : "Ask me anything about AFAQ Club"}
+                      {t("chat.greetingHint", "Ask me anything about AFAQ Club")}
                     </p>
                   </div>
                 </div>
@@ -371,6 +372,7 @@ export default function ChatbotModal({ open, onClose }) {
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <ChatMessage
+                    id={m.id}
                     role={m.role}
                     content={m.content}
                     streaming={m.id === streamingId}
@@ -393,7 +395,7 @@ export default function ChatbotModal({ open, onClose }) {
                   >
                     <img
                       src="/images/ai/pfp.webp"
-                      alt="AI"
+                      alt="" aria-hidden="true"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -431,20 +433,22 @@ export default function ChatbotModal({ open, onClose }) {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex flex-col items-center gap-2 py-3 px-4 rounded-xl"
-                  style={{ background: "#fef2f2" }}
+                  style={{ background: "color-mix(in srgb, var(--color-danger) 12%, transparent)" }}
+                  role="alert"
                 >
                   <p
                     className="text-xs text-center"
-                    style={{ color: "#dc2626" }}
+                    style={{ color: "var(--color-danger)" }}
                   >
                     {error}
                   </p>
                   <button
+                    type="button"
                     onClick={retry}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:opacity-80 active:scale-95"
-                    style={{ background: "#dc2626", color: "#fff" }}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:opacity-80 active:scale-95 cursor-pointer"
+                    style={{ background: "var(--color-danger)", color: "#fff" }}
                   >
-                    <RefreshCw size={11} /> Retry
+                    <RefreshCw size={11} aria-hidden="true" /> {t("chat.retry", "Try again")}
                   </button>
                 </motion.div>
               )}
@@ -482,11 +486,7 @@ export default function ChatbotModal({ open, onClose }) {
                   onBlur={() => setInputFocused(false)}
                   rows={1}
                   placeholder={
-                    lang === "ar"
-                      ? "اكتب رسالتك…"
-                      : lang === "fr"
-                      ? "Tapez votre message…"
-                      : "Type your message…"
+                    t("chat.placeholder", "Type your message…")
                   }
                   className="flex-1 resize-none px-3 md:px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors"
                   style={{
@@ -509,10 +509,12 @@ export default function ChatbotModal({ open, onClose }) {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.93 }}
                     className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 cursor-pointer"
-                    style={{ background: "#dc2626", color: "#fff" }}
-                    title="Stop"
+                    style={{ background: "var(--color-danger)", color: "#fff" }}
+                    type="button"
+                    title={t("chat.stop", "Stop generating")}
+                    aria-label={t("chat.stop", "Stop generating")}
                   >
-                    <StopCircle size={16} />
+                    <StopCircle size={16} aria-hidden="true" />
                   </motion.button>
                 ) : (
                   <motion.button
@@ -528,11 +530,13 @@ export default function ChatbotModal({ open, onClose }) {
                           : "var(--color-bg-alt, var(--color-border-light))",
                       color:
                         input.trim() && !loading
-                          ? "#fff"
+                          ? "var(--color-on-accent)"
                           : "var(--color-text-muted)",
                     }}
+                    type="button"
+                    aria-label={t("chat.send", "Send message")}
                   >
-                    <Send size={15} />
+                    <Send size={15} aria-hidden="true" />
                   </motion.button>
                 )}
               </div>

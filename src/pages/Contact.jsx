@@ -84,7 +84,7 @@ export default function Contact() {
                 {done ? (
                   <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={spring} className="text-center py-8">
                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ ...spring, delay: 0.1 }} className="inline-flex items-center justify-center mb-6"
-                      style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.1)', color: '#16A34A' }}>
+                      style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.1)', color: 'var(--color-success)' }}>
                       <Send size={32} />
                     </motion.div>
                     <h3 className="text-2xl font-bold mb-3">{t('form.success')}</h3>

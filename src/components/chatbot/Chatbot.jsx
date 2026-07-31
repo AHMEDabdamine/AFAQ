@@ -1,19 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import ChatbotButton from './ChatbotButton'
 import ChatbotModal from './ChatbotModal'
 
 export default function Chatbot() {
   const [open, setOpen] = useState(false)
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) return
-  }, [])
-
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) return null
-
+  // The admin check that used to live here read window.location directly, so
+  // it never re-evaluated on navigation. App decides where this mounts now.
   return (
     <>
-      <ChatbotButton open={open} onClick={() => setOpen(!open)} />
+      <ChatbotButton open={open} onClick={() => setOpen(o => !o)} />
       <ChatbotModal open={open} onClose={() => setOpen(false)} />
     </>
   )

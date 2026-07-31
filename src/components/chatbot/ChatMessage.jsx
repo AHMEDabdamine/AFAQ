@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { User, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -11,16 +12,20 @@ function autoLink(text) {
   });
 }
 
-function formatTime() {
-  return new Date().toLocaleTimeString([], {
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-export default function ChatMessage({ role, content, streaming }) {
+export default function ChatMessage({ role, content, streaming, id }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const isUser = role === "user";
+  // Was recomputed on every render, so every bubble showed the current clock
+  // time and they all ticked forward together. The id is the send timestamp.
+  const sentAt = useMemo(() => formatTime(id ?? Date.now()), [id]);
 
   if (!isUser && !content && !streaming) return null;
 
@@ -40,7 +45,7 @@ export default function ChatMessage({ role, content, streaming }) {
         className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden"
         style={{
           background: isUser ? "var(--color-accent)" : "var(--color-bg-alt)",
-          color: isUser ? "#fff" : "var(--color-text-muted)",
+          color: isUser ? "var(--color-on-accent)" : "var(--color-text-muted)",
         }}
       >
         {isUser ? (
@@ -48,7 +53,7 @@ export default function ChatMessage({ role, content, streaming }) {
         ) : (
           <img
             src="/images/ai/pfp.webp"
-            alt="AI"
+            alt="" aria-hidden="true"
             className="w-full h-full object-cover"
           />
         )}
@@ -63,7 +68,7 @@ export default function ChatMessage({ role, content, streaming }) {
           className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed prose prose-sm max-w-none"
           style={{
             background: isUser ? "var(--color-accent)" : "var(--color-bg-alt)",
-            color: isUser ? "#fff" : "var(--color-text)",
+            color: isUser ? "var(--color-on-accent)" : "var(--color-text)",
             borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
             wordBreak: "break-word",
             overflowWrap: "break-word",
@@ -138,21 +143,23 @@ export default function ChatMessage({ role, content, streaming }) {
         </div>
 
         {!streaming && (
-          <div className="flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <span
               className="text-[10px]"
               style={{ color: "var(--color-text-muted)" }}
             >
-              {formatTime()}
+              {sentAt}
             </span>
             {!isUser && (
               <button
+                type="button"
                 onClick={handleCopy}
-                className="p-0.5 rounded hover:opacity-70 transition-opacity"
+                className="p-1 rounded hover:opacity-70 transition-opacity cursor-pointer"
                 style={{ color: "var(--color-text-muted)" }}
-                title="Copy"
+                title={copied ? t("chat.copied", "Copied") : t("chat.copy", "Copy reply")}
+                aria-label={copied ? t("chat.copied", "Copied") : t("chat.copy", "Copy reply")}
               >
-                {copied ? <Check size={10} /> : <Copy size={10} />}
+                {copied ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
               </button>
             )}
           </div>

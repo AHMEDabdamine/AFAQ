@@ -33,8 +33,8 @@ export default function ProjectHighlights() {
       <SideImage side="right" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <div className="eyebrow eyebrow-center mb-4">{t('projects.title')}</div>
-          <h2 className="text-3xl md:text-4xl font-bold">{t('projects.title')}</h2>
+          <div className="eyebrow eyebrow-center mb-4">{t('projects.eyebrow', 'Built by members')}</div>
+          <h2 className="text-3xl md:text-4xl">{t('projects.title')}</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -42,9 +42,9 @@ export default function ProjectHighlights() {
             <Card key={p.id} delay={i * 0.08}>
               <div className="card-image-overlay relative" style={{ height: 200, background: 'var(--color-bg-alt)' }}>
                 {p.thumbnail_url ? (
-                  <img src={p.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <img src={p.thumbnail_url} alt={tField(p, 'title')} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>No image</div>
+                  <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('noImage', 'No image')}</div>
                 )}
                 <div className="category-tag">{p.category}</div>
               </div>
@@ -54,7 +54,7 @@ export default function ProjectHighlights() {
                     <Users size={12} /> {p.team_members || 0} {t('projects:card.members')}
                   </span>
                 </div>
-                <h3 className="font-bold text-lg mb-2 leading-snug" style={{ fontFamily: "'Minecraft', sans-serif", fontWeight: 700 }}>
+                <h3 className="text-lg mb-2 leading-snug">
                   {tField(p, 'title')}
                 </h3>
                 <p className="text-sm mb-4 line-clamp-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
@@ -71,9 +71,9 @@ export default function ProjectHighlights() {
         </div>
 
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-30px' }} transition={spring} className="text-center mt-10">
-          <Link to="/projects" className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200"
-            style={{ background: '#fff', color: '#0F172A', border: '2px solid #0F172A' }}>
-            {t('projects.viewAll')} <ChevronRight size={15} />
+          <Link to="/projects" className="btn btn-outline btn-md">
+            {t('projects.viewAll')}
+            <ChevronRight size={15} className="btn-icon" aria-hidden="true" />
           </Link>
         </motion.div>
       </div>

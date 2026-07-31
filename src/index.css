@@ -1,45 +1,20 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: #0a1220;
-  --color-accent: #2460e7;
-  --color-accent-soft: #eef2fa;
-  --color-accent-dark: #1a45cc;
-  --color-bg: #fafaf8;
-  --color-bg-alt: #f0efeb;
-  --color-text: #0a1220;
-  --color-text-muted: #6b7280;
-  --color-card: #ffffff;
-  --color-border: #d1d5db;
-  --color-border-light: #e5e7eb;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-inverse: #0f172a;
-  --font-heading: "Minecraft", system-ui, sans-serif;
-  --font-body: "Minecraft", system-ui, sans-serif;
-  --font-display: "Minecraft", system-ui, serif;
-  --font-arabic: "Unixel", system-ui, sans-serif;
-}
+/* Bind Tailwind's `dark:` variant to the theme the toggle sets. Left at its
+   default it keys off prefers-color-scheme, so any `dark:` utility would
+   disagree with the rest of the site the moment someone chose a theme. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Dark mode variables */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-primary: #0a1220;
-    --color-accent: #60a5fa;
-    --color-accent-soft: #1a45cc;
-    --color-bg: #0a1220;
-    --color-bg-alt: #1a1a1a;
-    --color-text: #fafaf8;
-    --color-text-muted: #a0a0a0;
-    --color-card: #1f2937;
-    --color-border: #374151;
-    --color-border-light: #4b5563;
-    --color-success: #16a34a;
-    --color-warning: #d97706;
-    --color-inverse: #f9fafb;
-  }
-}
-
+/* ---------------------------------------------------------------------------
+   Type roles
+   Minecraft is a 117-glyph pixel face on a 128-unit grid, extended in-repo with
+   the French accents and punctuation the site needs. It carries display work
+   only: headlines, the wordmark, stat figures, eyebrows.
+   IBM Plex Sans carries everything a reader actually reads. It was drawn for
+   engineering documentation, so its slightly mechanical skeleton sits next to
+   the pixel grid without competing, and the superfamily covers Latin, Arabic
+   and mono from one design - so the trilingual site reads as one site.
+--------------------------------------------------------------------------- */
 @font-face {
   font-family: "Minecraft";
   src: url("/fonts/Minecraft.woff2") format("woff2"),
@@ -54,20 +29,140 @@
   font-weight: normal;
   font-style: normal;
   font-display: swap;
-  font-size: larger;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/plex-sans-latin.woff2") format("woff2");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/plex-sans-latin-ext.woff2") format("woff2");
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Arabic";
+  src: url("/fonts/plex-arabic-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Arabic";
+  src: url("/fonts/plex-arabic-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Arabic";
+  src: url("/fonts/plex-arabic-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/plex-mono-latin.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
-.font-ko-black {
-  font-family: "Minecraft", system-ui, sans-serif;
+@theme {
+  --color-primary: #0a1220;
+  --color-accent: #2460e7;
+  --color-accent-soft: #eef2fa;
+  --color-accent-dark: #1a45cc;
+  --color-bg: #fafaf8;
+  --color-bg-alt: #f0efeb;
+  --color-text: #0a1220;
+  /* 5.7:1 or better on every surface used in the design; the old #6b7280
+     dropped to 4.3:1 on the tinted hero and stats bands. */
+  --color-text-muted: #565f70;
+  --color-text-subtle: #6b7280;
+  --color-card: #ffffff;
+  --color-border: #d1d5db;
+  --color-border-light: #e5e7eb;
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+  --color-inverse: #0f172a;
+  --color-hero: #eef2ff;
+  --color-surface-alt: #f1f5f9;
+
+  --color-on-accent: #ffffff;
+  --color-gold: #b26f05;
+  --color-grid: #d7dce6;
+  --color-overlay: rgba(6, 12, 24, 0.62);
+
+  --font-display: "Minecraft", "IBM Plex Sans", system-ui, sans-serif;
+  --font-heading: "Minecraft", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-arabic: "Unixel", "IBM Plex Arabic", system-ui, sans-serif;
+
+  /* Focus ring, defined once so every interactive surface matches. */
+  --focus-ring: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 5px var(--color-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme: a printed circuit board, not an inverted page.
+   The board colour is the deep navy of solder mask, the raised surfaces are
+   the same board catching more light, and the secondary accent is the warm
+   gold of ENIG-plated pads. Blue-and-gold comes straight off the hardware the
+   club actually builds with, and keeps the theme away from the usual
+   near-black-plus-neon.
+--------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --color-primary: #e8eef7;
+  --color-accent: #4d8dff;
+  --color-accent-soft: #172947;
+  --color-accent-dark: #7fb0ff;
+  --color-bg: #0a1420;
+  --color-bg-alt: #111f31;
+  --color-text: #e8eef7;
+  --color-text-muted: #9db0ca;
+  --color-text-subtle: #8294ae;
+  --color-card: #111f31;
+  --color-border: #2b3d55;
+  --color-border-light: #22334a;
+  --color-success: #4ade80;
+  --color-danger: #ff6b6b;
+  --color-warning: #f0b954;
+  --color-inverse: #e8eef7;
+  --color-hero: #0c1a2b;
+  --color-surface-alt: #0d1a2a;
+  /* White on this blue is only 3.2:1, so filled accent buttons take the
+     board colour for their label instead. */
+  --color-on-accent: #08111c;
+  --color-gold: #e0a63c;
+  --color-grid: #1e304a;
+  --color-overlay: rgba(2, 7, 14, 0.72);
+
+  color-scheme: dark;
 }
 
 html {
-  scroll-behavior: smooth;
+  /* Lenis drives scrolling; native smooth scroll fights it and causes the
+     stutter on anchor jumps. */
+  scroll-behavior: auto;
   overflow-y: scroll;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  font-family: "Minecraft", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   font-weight: 400;
   font-size: 16px;
   line-height: 1.6;
@@ -75,11 +170,14 @@ body {
   color: var(--color-text);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-[dir="rtl"] body,
-[dir="rtl"] body * {
-  font-family: "Unixel", "Poppins", system-ui, sans-serif !important;
+/* Arabic: Unixel is a display face, so it stays on headings and the body text
+   moves to Plex Arabic. This replaces the old blanket `body *` !important rule,
+   which forced a display face onto paragraphs, inputs and tables. */
+[dir="rtl"] body {
+  font-family: "IBM Plex Arabic", "IBM Plex Sans", system-ui, sans-serif;
 }
 
 [dir="rtl"] h1,
@@ -88,11 +186,17 @@ body {
 [dir="rtl"] h4,
 [dir="rtl"] h5,
 [dir="rtl"] .font-heading,
-[dir="rtl"] .eyebrow,
-[dir="rtl"] .nav-link,
-[dir="rtl"] .badge,
-[dir="rtl"] .pill {
-  font-family: "Unixel", "Poppins", system-ui, sans-serif !important;
+[dir="rtl"] .display-text,
+[dir="rtl"] .font-ko-black,
+[dir="rtl"] .stat-number,
+[dir="rtl"] .eyebrow {
+  font-family: var(--font-arabic);
+  letter-spacing: 0;
+}
+
+/* Arabic never takes negative tracking - it breaks joining. */
+[dir="rtl"] * {
+  letter-spacing: 0 !important;
 }
 
 h1,
@@ -100,25 +204,24 @@ h2,
 h3,
 h4,
 h5,
-.font-heading {
-  font-family: "Minecraft", system-ui, sans-serif !important;
-  font-weight: 400 !important;
+.font-heading,
+.font-ko-black {
+  font-family: var(--font-display);
+  font-weight: 400;
   letter-spacing: -0.02em;
+  /* The extended accents rise to 0.94em, so lines need room above. */
+  line-height: 1.2;
 }
 
 .display-text {
-  font-family: "Minecraft", system-ui, sans-serif !important;
+  font-family: var(--font-display);
   font-weight: 400;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
-}
-
-[dir="rtl"] .display-text {
-  font-family: "Unixel", "Poppins", system-ui, sans-serif !important;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
 
 .label-text {
-  font-family: "Minecraft", system-ui, sans-serif;
+  font-family: var(--font-mono);
   font-weight: 500;
   font-size: 12px;
   letter-spacing: 0.05em;
@@ -126,27 +229,219 @@ h5,
 }
 
 .body-text {
-  font-family: "Minecraft", system-ui, sans-serif;
+  font-family: var(--font-body);
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
-* {
-  transition-property: background-color, border-color, color;
-  transition-duration: 300ms;
+/* ---------------------------------------------------------------------------
+   Focus. Every interactive element gets a visible ring, and only via keyboard.
+--------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Dark surfaces need a light ring to stay visible. */
+.blue-highlight :focus-visible,
+.on-dark :focus-visible {
+  outline-color: #fff;
+}
+
+.skip-link {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translate(-50%, -150%);
+  z-index: 100;
+  background: var(--color-accent);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: transform 0.18s ease;
+}
+
+.skip-link:focus {
+  transform: translate(-50%, 0);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion. Respect the OS setting: no infinite ambient motion, no scroll
+   hijacking, no entrance animations that delay content.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .hero-fade-up,
+  .hero-fade-up-d2,
+  .hero-fade-up-d3,
+  .hero-fade-up-d4,
+  .hero-fade-up-d5,
+  .animate-up,
+  .animate-fade,
+  .animate-scale {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons. Inline styles can't express :hover/:active/:disabled, so the
+   variants live here and Button.jsx only picks a class.
+--------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    transform 0.2s ease, box-shadow 0.2s ease;
+  /* Never smaller than a comfortable touch target. */
+  min-height: 44px;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 14px;
+  min-height: 40px;
+}
+.btn-md {
+  padding: 12px 26px;
+  font-size: 15px;
+}
+.btn-lg {
+  padding: 15px 32px;
+  font-size: 16px;
+  min-height: 52px;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: var(--color-inverse);
+  color: var(--color-bg);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: 0 8px 24px rgba(36, 96, 231, 0.28);
+  transform: translateY(-2px);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--color-accent-dark);
+  transform: translateY(1px);
+}
+
+.btn-outline {
+  background: var(--color-card);
+  color: var(--color-inverse);
+  border-color: var(--color-inverse);
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-inverse);
+  color: var(--color-bg);
+  transform: translateY(-2px);
+}
+.btn-outline:active:not(:disabled) {
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+  color: var(--color-on-accent);
+  transform: translateY(1px);
+}
+
+.btn-accent {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+.btn-accent:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+  box-shadow: 0 8px 24px rgba(36, 96, 231, 0.3);
+  transform: translateY(-2px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.btn-white {
+  background: #fff;
+  color: #0a1628;
+}
+.btn-white:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  transform: translateY(-2px);
+}
+
+/* The arrow leans into the direction of travel on hover, and flips in RTL. */
+.btn .btn-icon {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.btn:hover .btn-icon {
+  transform: translateX(3px);
+}
+[dir="rtl"] .btn .btn-icon {
+  transform: scaleX(-1);
+}
+[dir="rtl"] .btn:hover .btn-icon {
+  transform: scaleX(-1) translateX(3px);
 }
 
 /* Animations */
-@keyframes shimmer {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -458,7 +753,7 @@ h5,
 
 /* Eyebrow */
 .eyebrow {
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -492,17 +787,39 @@ h5,
   flex-shrink: 0;
 }
 
-/* Dot grid */
+/* The substrate: breadboard pitch, 32px, running under the whole site. In the
+   dark theme these read as plated holes on the board. */
 .dot-grid {
   position: absolute;
   inset: 0;
   background-image: radial-gradient(
     circle,
-    var(--color-border-light) 1px,
+    var(--color-grid) 1px,
     transparent 1px
   );
   background-size: 32px 32px;
-  opacity: 0.5;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.theme-toggle:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 /* Hero gradient */
@@ -538,6 +855,56 @@ h5,
   border-color: rgba(36, 96, 231, 0.18);
 }
 
+/* ---------------------------------------------------------------------------
+   Overlays. Dialogs use these rather than .card-pro - that class carries a
+   hover lift, so dialogs jumped 8px whenever the pointer crossed them.
+--------------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--color-overlay);
+  backdrop-filter: blur(3px);
+  overscroll-behavior: contain;
+}
+
+.modal-card {
+  position: relative;
+  width: 100%;
+  background: var(--color-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(6, 12, 24, 0.28);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+}
+
 /* Card image gradient overlay */
 .card-image-overlay {
   position: relative;
@@ -564,7 +931,7 @@ h5,
   border-radius: 100px;
   font-size: 11px;
   font-weight: 600;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -594,7 +961,7 @@ h5,
   border: 1.5px solid var(--color-border-light);
   background: transparent;
   color: var(--color-text-muted);
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
   font-size: 13px;
   cursor: pointer;
@@ -606,7 +973,7 @@ h5,
 .pill.active {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .pill:not(.active):hover {
@@ -643,15 +1010,15 @@ h5,
 
 .card-pro:hover .icon-box {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   transform: scale(1.05);
 }
 
 /* Glass card */
 .glass-card {
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--color-card) 78%, transparent);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--color-border-light);
   border-radius: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
 }
@@ -673,7 +1040,7 @@ h5,
 }
 
 .stat-number {
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 44px;
   line-height: 1;
@@ -688,7 +1055,7 @@ h5,
   font-size: 13px;
   color: var(--color-text-muted);
   font-weight: 500;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-body);
 }
 
 /* Gallery items */
@@ -735,7 +1102,7 @@ h5,
   border: 1.5px solid var(--color-border-light);
   border-radius: 100px;
   padding: 16px 20px;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   color: var(--color-text);
   outline: none;
@@ -748,8 +1115,56 @@ h5,
   box-shadow: 0 0 0 3px rgba(36, 96, 231, 0.1);
 }
 
-.form-input.error {
-  border-color: #ef4444;
+.form-input.error,
+.form-input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.form-input.error:focus,
+.form-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.form-input:disabled {
+  background: var(--color-bg-alt);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* Error text carries an icon-free marker so it reads without relying on colour. */
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding-inline-start: 20px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-danger);
+}
+
+.field-hint {
+  margin-top: 7px;
+  padding-inline-start: 20px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  padding-inline-start: 4px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.form-label .required {
+  color: var(--color-danger);
+  margin-inline-start: 2px;
 }
 
 textarea.form-input {
@@ -796,7 +1211,7 @@ select.form-input {
   color: var(--color-text-muted);
   pointer-events: none;
   transition: all 0.2s ease;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-body);
   opacity: 0.7;
 }
 
@@ -835,7 +1250,7 @@ select.form-input {
 
 .social-btn:hover {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   transform: translateY(-3px);
   box-shadow: 0 6px 20px rgba(36, 96, 231, 0.3);
 }
@@ -851,10 +1266,10 @@ select.form-input {
   position: relative;
   background: none;
   border: none;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
   font-size: 14px;
-  color: #334155;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 8px 14px;
   border-radius: 8px;
@@ -863,11 +1278,11 @@ select.form-input {
 }
 
 .nav-link:hover {
-  color: #2563eb;
+  color: var(--color-accent);
 }
 
 .nav-link.active {
-  color: #2563eb;
+  color: var(--color-accent);
 }
 
 .nav-link.active::after {
@@ -877,7 +1292,7 @@ select.form-input {
   left: 14px;
   right: 14px;
   height: 2px;
-  background: #2563eb;
+  background: var(--color-accent);
   border-radius: 2px;
 }
 
@@ -1060,7 +1475,7 @@ select.form-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-mono);
   font-weight: 600;
   font-size: 14px;
   transition: all 0.3s;
@@ -1073,7 +1488,7 @@ select.form-input {
 .step-circle.active {
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   box-shadow: 0 4px 12px rgba(36, 96, 231, 0.25);
 }
 
@@ -1123,7 +1538,7 @@ select.form-input {
 }
 
 .date-badge-day {
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 22px;
   color: var(--color-text);
@@ -1131,7 +1546,7 @@ select.form-input {
 }
 
 .date-badge-month {
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-mono);
   font-weight: 400;
   font-size: 10px;
   text-transform: uppercase;
@@ -1149,7 +1564,7 @@ select.form-input {
   border-radius: 100px;
   font-size: 11px;
   font-weight: 600;
-  font-family: "Minecraft", sans-serif;
+  font-family: var(--font-mono);
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(8px);
   color: #fff;

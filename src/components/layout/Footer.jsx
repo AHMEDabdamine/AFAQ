@@ -11,75 +11,83 @@ import {
 
 const spring = { type: "spring", damping: 28, stiffness: 120 };
 
+/** Every destination in the site, so the footer works as a real site map. */
+const NAV_ITEMS = [
+  { key: "about", path: "/about" },
+  { key: "projects", path: "/projects" },
+  { key: "events", path: "/events" },
+  { key: "gallery", path: "/gallery" },
+  { key: "announcements", path: "/announcements" },
+  { key: "join", path: "/join" },
+  { key: "contact", path: "/contact" },
+];
+
 export default function Footer() {
   const { t } = useTranslation();
 
-  const navItems = ["about", "projects", "events", "gallery", "contact"];
-
-  const footerLinks = [
-    {
-      title: t("footer.quickLinks"),
-      links: navItems.map((k) => ({
-        label: t(`nav.${k}`),
-        href: `/${k === "about" ? "about" : k}`,
-      })),
-    },
-  ];
-
   const contactInfo = [
     {
-      icon: <Mail size={18} className="text-[#3ca2fa]" />,
+      icon: Mail,
       text: "afaqclub.bouira@gmail.com",
       href: "mailto:afaqclub.bouira@gmail.com",
     },
-    {
-      icon: <MapPin size={18} className="text-[#3ca2fa]" />,
-      text: "Bouira, Algeria",
-    },
+    { icon: MapPin, text: "Bouira, Algeria" },
   ];
 
   return (
-    <footer className="bg-[#0F0F11]/10 relative h-fit rounded-none">
-      <div className="max-w-7xl mx-auto p-8 md:p-14 z-40 relative">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 md:gap-8 lg:gap-16 pb-12">
+    // The footer was translucent dark over a light page, which left near-black
+    // body text sitting on mid-grey. It's now solidly dark, so the light type
+    // and the #3ca2fa accent both clear AA comfortably.
+    <footer className="on-dark relative h-fit bg-[#0a1220] text-[#b3c2da]">
+      <FooterBackgroundGradient />
+
+      <div className="max-w-7xl mx-auto px-6 py-14 md:px-14 md:py-16 z-10 relative">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-16 pb-12">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-30px" }}
             transition={spring}
-            className="flex flex-col space-y-4"
+            className="flex flex-col gap-4"
           >
-            <Link to="/" className="flex items-center space-x-2 group">
-              <Logo size={40} />
-              <span className="text-3xl font-bold">AFAQ</span>
+            <Link to="/" className="flex items-center gap-2.5 w-fit">
+              <Logo size={40} variant="white" decorative />
+              <span
+                className="text-3xl text-white"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                AFAQ
+              </span>
             </Link>
-            <p className="text-sm leading-relaxed">{t("footer.description")}</p>
-            <SocialIcons />
+            <p className="text-sm leading-relaxed max-w-xs">
+              {t("footer.description")}
+            </p>
+            <SocialIcons className="mt-1" />
           </motion.div>
 
-          {footerLinks.map((section) => (
-            <motion.div
-              key={section.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
-              transition={{ ...spring, delay: 0.1 }}
-            >
-              <h4 className="text-lg font-semibold mb-6">{section.title}</h4>
-              <ul className="space-y-3">
-                {section.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      to={link.href}
-                      className="hover:text-[#3ca2fa] transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          ))}
+          <motion.nav
+            aria-label={t("footer.quickLinks")}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-30px" }}
+            transition={{ ...spring, delay: 0.1 }}
+          >
+            <h2 className="text-base font-semibold mb-5 text-white">
+              {t("footer.quickLinks")}
+            </h2>
+            <ul className="flex flex-col gap-3 list-none p-0 m-0">
+              {NAV_ITEMS.map((item) => (
+                <li key={item.key}>
+                  <Link
+                    to={item.path}
+                    className="text-sm text-[#c7d2e4] hover:text-[#3ca2fa] transition-colors"
+                  >
+                    {t(`nav.${item.key}`)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </motion.nav>
 
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -87,24 +95,26 @@ export default function Footer() {
             viewport={{ once: true, margin: "-30px" }}
             transition={{ ...spring, delay: 0.2 }}
           >
-            <h4 className="text-lg font-semibold mb-6">
+            <h2 className="text-base font-semibold mb-5 text-white">
               {t("footer.connect")}
-            </h4>
-            <ul className="space-y-4">
-              {contactInfo.map((item, i) => (
-                <li key={i} className="flex items-center space-x-3">
-                  {item.icon}
+            </h2>
+            <ul className="flex flex-col gap-4 list-none p-0 m-0">
+              {contactInfo.map((item) => (
+                <li key={item.text} className="flex items-center gap-3">
+                  <item.icon
+                    size={18}
+                    className="text-[#3ca2fa] shrink-0"
+                    aria-hidden="true"
+                  />
                   {item.href ? (
                     <a
                       href={item.href}
-                      className="hover:text-[#3ca2fa] transition-colors"
+                      className="text-sm text-[#c7d2e4] hover:text-[#3ca2fa] transition-colors break-all"
                     >
                       {item.text}
                     </a>
                   ) : (
-                    <span className="hover:text-[#3ca2fa] transition-colors">
-                      {item.text}
-                    </span>
+                    <span className="text-sm">{item.text}</span>
                   )}
                 </li>
               ))}
@@ -112,33 +122,25 @@ export default function Footer() {
           </motion.div>
         </div>
 
-        <motion.hr
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="border-t border-gray-700 my-8"
-        />
+        <hr className="border-0 border-t border-white/12 my-8" />
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-30px" }}
-          transition={{ ...spring, delay: 0.3 }}
-          className="flex flex-col md:flex-row justify-between items-center text-sm space-y-4 md:space-y-0"
-        >
-          <p className="text-center md:text-left">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-[#8fa0bb]">
+          <p className="text-center md:text-start">
             &copy; {new Date().getFullYear()} AFAQ Scientific Club.{" "}
             {t("footer.rights")}
           </p>
           <p>{t("footer.university")}</p>
-        </motion.div>
+        </div>
 
-        <div className="flex w-full h-[8rem] sm:h-[12rem] md:h-[16rem] lg:h-[28rem] mt-4 sm:mt-6 md:mt-8 lg:mt-12">
+        {/* Purely ornamental wordmark - hidden from assistive tech, and no
+            longer wearing a pointer cursor it can't honour. */}
+        <div
+          className="flex w-full h-[6rem] sm:h-[9rem] md:h-[12rem] lg:h-[15rem] mt-6 md:mt-10"
+          aria-hidden="true"
+        >
           <TextHoverEffect text="AFAQ" />
         </div>
       </div>
-
-      <FooterBackgroundGradient />
     </footer>
   );
 }

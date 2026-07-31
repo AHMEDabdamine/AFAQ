@@ -1,15 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Lightbulb,
-  Rocket,
-  Users,
-  Code,
-  Cpu,
-  Zap,
-  Trophy,
-  Wrench,
-} from "lucide-react";
+import { Rocket, Users, Code, Cpu, Zap, Trophy, Wrench } from "lucide-react";
 import { Button } from "../shared/Button";
 
 function Img({ src, alt, className, style, fetchPriority, loading }) {
@@ -17,12 +8,18 @@ function Img({ src, alt, className, style, fetchPriority, loading }) {
   if (failed) {
     return (
       <div
-        className={`flex items-center justify-center bg-blue-100 border-2 border-blue-200 text-blue-400 text-sm rounded-2xl ${
+        className={`flex items-center justify-center text-sm rounded-2xl p-3 text-center ${
           className || ""
         }`}
-        style={style}
+        style={{
+          ...style,
+          background: "var(--color-accent-soft)",
+          border: "1px solid var(--color-border-light)",
+          color: "var(--color-text-muted)",
+          filter: "none",
+        }}
       >
-        {alt || "Image"}
+        {alt}
       </div>
     );
   }
@@ -42,7 +39,8 @@ function Img({ src, alt, className, style, fetchPriority, loading }) {
 function Badge({ icon, label, className }) {
   return (
     <div
-      className={`absolute bg-white rounded-full shadow-lg flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-800 z-20 ${className}`}
+      className={`absolute rounded-full shadow-lg flex items-center gap-2 px-4 py-2 text-sm font-semibold z-20 ${className}`}
+      style={{ background: 'var(--color-card)', color: 'var(--color-text)', border: '1px solid var(--color-border-light)' }}
     >
       {icon}
       <span>{label}</span>
@@ -69,11 +67,13 @@ function HeroLeft() {
           borderRadius: "inherit",
         }}
       />
-      <div className="relative z-10 hero-fade-up text-blue-500 text-sm font-semibold tracking-[0.15em] uppercase mb-5">
+      <div className="relative z-10 hero-fade-up text-sm font-semibold tracking-[0.15em] uppercase mb-5"
+        style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>
         {t("hero.badge")}
       </div>
 
-      <h1 className="relative z-10 hero-fade-up-d2 font-ko-black font-black text-5xl sm:text-6xl lg:text-7xl leading-tight text-[#0F172A] mb-6">
+      <h1 className="relative z-10 hero-fade-up-d2 display-text text-5xl sm:text-6xl lg:text-7xl mb-6"
+        style={{ color: 'var(--color-text)' }}>
         {lines.map((line, li) => (
           <div key={li}>
             {line.split(" ").map((word, i, arr) => {
@@ -85,7 +85,7 @@ function HeroLeft() {
                 clean.includes("آفاق") ||
                 clean.includes("avenir");
               return (
-                <span key={i} className={isHighlight ? "text-blue-500" : ""}>
+                <span key={i} style={isHighlight ? { color: 'var(--color-accent)' } : undefined}>
                   {word}
                   {i < arr.length - 1 ? " " : ""}
                 </span>
@@ -96,9 +96,10 @@ function HeroLeft() {
       </h1>
 
       <p
-        className={`relative z-10 hero-fade-up-d3 text-slate-500 text-base sm:text-lg leading-relaxed max-w-lg mb-4 mx-auto ${
+        className={`relative z-10 hero-fade-up-d3 text-base sm:text-lg leading-relaxed max-w-lg mb-4 mx-auto ${
           isRTL ? "lg:mr-0 lg:ml-auto" : "lg:mx-0"
         }`}
+        style={{ color: 'var(--color-text-muted)' }}
       >
         {(() => {
           const words = t("hero.subtitle").split(" ");
@@ -107,7 +108,7 @@ function HeroLeft() {
           const rest = words.slice(0, -2).join(" ");
           return (
             <>
-              {rest} <span className="text-blue-500">{lastTwo}</span>
+              {rest} <span style={{ color: 'var(--color-accent)' }}>{lastTwo}</span>
             </>
           );
         })()}
@@ -126,214 +127,123 @@ function HeroLeft() {
 }
 
 function HeroRight() {
-  const { i18n } = useTranslation("home");
-  const isRTL = i18n.language === "ar";
-  const ringStyle = (tilt, radius, opts = {}) => ({
+  const { t, i18n } = useTranslation("home");
+  const isRTL = i18n.dir() === "rtl";
+
+  // Two orbits, not seven. The original stacked seven rotating rings carrying
+  // ~90 particle nodes at 0.25 opacity - invisible work for the compositor on
+  // every frame, forever.
+  const ring = (radius, tilt, opacity) => ({
     width: radius * 2,
     height: radius * 2,
     borderRadius: "50%",
-    border: opts.border || "1.5px solid rgba(59,130,246,0.25)",
+    border: `1px solid rgba(77,141,255,${opacity})`,
     position: "absolute",
-    left: "50%",
+    insetInlineStart: "50%",
     top: "50%",
-    marginLeft: -radius,
+    marginInlineStart: -radius,
     marginTop: -radius,
     transform: `rotateX(${tilt}deg)`,
-    ...opts.extra,
   });
 
-  const ringParticles = (count, radius) =>
-    Array.from({ length: count }, (_, i) => {
-      const angle = (360 / count) * i;
-      return (
+  const nodes = (count, radius) =>
+    Array.from({ length: count }, (_, i) => (
+      <div
+        key={i}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: `rotateY(${(360 / count) * i}deg) translateZ(${radius}px)`,
+        }}
+      >
         <div
-          key={i}
+          className="rounded-full"
           style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: `rotateY(${angle}deg) translateZ(${radius}px)`,
+            width: 3,
+            height: 3,
+            marginLeft: -1.5,
+            marginTop: -1.5,
+            background: "var(--color-accent)",
+            boxShadow: "0 0 8px var(--color-accent)",
           }}
-        >
-          <div
-            className="rounded-full"
-            style={{
-              width: i % 3 === 0 ? 3 : 2,
-              height: i % 3 === 0 ? 3 : 2,
-              background:
-                i % 2 === 0 ? "rgba(59,130,246,0.7)" : "rgba(147,197,253,0.5)",
-              boxShadow: i % 3 === 0 ? "0 0 8px rgba(59,130,246,0.5)" : "none",
-              marginLeft: i % 3 === 0 ? -1.5 : -1,
-              marginTop: i % 3 === 0 ? -1.5 : -1,
-            }}
-          />
-        </div>
-      );
-    });
+        />
+      </div>
+    ));
 
   return (
-    <div className="hidden lg:block flex-1 relative w-full max-w-[280px] sm:max-w-sm lg:max-w-none h-[320px] sm:h-[400px] lg:h-[520px] xl:h-[600px]">
+    // Visible from `sm` up: the whole composition used to be `hidden lg:block`,
+    // so phones and tablets got the headline and an empty blue glow.
+    //
+    // `shrink-0` and a fixed height below `lg` matter: as a flex-1 child in a
+    // column the box got squeezed shorter than its own artwork, and the
+    // absolutely-positioned boards spilled up over the buttons.
+    <div className="relative shrink-0 lg:flex-1 w-full max-w-[340px] sm:max-w-md lg:max-w-none h-[320px] sm:h-[440px] lg:h-[520px] xl:h-[600px] mx-auto">
       <Img
         src="/images/hero/bolt.webp"
-        alt="Bolt"
+        alt=""
+        fetchPriority="high"
         className="absolute inset-0 w-full h-full z-0 object-contain"
         style={{
           transform: "scale(1.35)",
           filter:
-            "drop-shadow(0 40px 100px rgba(59,130,246,0.45)) drop-shadow(0 0 60px rgba(59,130,246,0.15))",
+            "drop-shadow(0 40px 100px rgba(59,130,246,0.4)) drop-shadow(0 0 60px rgba(59,130,246,0.14))",
         }}
       />
 
       <div
-        className="hidden md:block absolute inset-0 z-[1]"
+        className="hidden md:block absolute inset-0 z-[1] pointer-events-none"
         style={{ perspective: 1200, transformStyle: "preserve-3d" }}
+        aria-hidden="true"
       >
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "22s" }}
-        >
-          <div style={{ ...ringStyle(65, 260) }} />
-          {ringParticles(10, 260)}
+        <div className="orbit-ring" style={{ position: "absolute", inset: 0, "--speed": "28s" }}>
+          <div style={ring(240, 68, 0.22)} />
+          {nodes(8, 240)}
         </div>
-
-        <div
-          className="orbit-ring-reverse"
-          style={{ position: "absolute", inset: 0, "--speed": "28s" }}
-        >
-          <div style={{ ...ringStyle(-40, 220) }} />
-          {ringParticles(8, 220)}
+        <div className="orbit-ring-reverse" style={{ position: "absolute", inset: 0, "--speed": "38s" }}>
+          <div style={ring(300, 80, 0.14)} />
+          {nodes(10, 300)}
         </div>
-
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "35s" }}
-        >
-          <div style={{ ...ringStyle(80, 300) }} />
-          {ringParticles(12, 300)}
-        </div>
-
-        <div
-          className="orbit-particle"
-          style={{ position: "absolute", inset: 0, "--p-speed": "9s" }}
-        >
-          <div style={{ ...ringStyle(-55, 180) }} />
-          {ringParticles(6, 180)}
-        </div>
-
-        <div
-          className="orbit-ring-reverse"
-          style={{ position: "absolute", inset: 0, "--speed": "28s" }}
-        >
-          <div style={{ ...ringStyle(-40, 220) }} />
-          <div
-            style={{
-              ...ringStyle(-40, 226, {
-                border: "1px solid rgba(59,130,246,0.08)",
-              }),
-            }}
-          />
-          {ringParticles(14, 220)}
-        </div>
-
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "35s" }}
-        >
-          <div
-            style={{
-              ...ringStyle(80, 300, {
-                border: "1px solid rgba(59,130,246,0.12)",
-              }),
-            }}
-          />
-          {ringParticles(22, 300)}
-        </div>
-
-        <div
-          className="orbit-particle"
-          style={{ position: "absolute", inset: 0, "--p-speed": "9s" }}
-        >
-          <div
-            style={{
-              ...ringStyle(-55, 180, {
-                border: "1px solid rgba(59,130,246,0.15)",
-              }),
-            }}
-          />
-          {ringParticles(12, 180)}
-        </div>
-      </div>
-
-      <Badge
-        icon={<Code size={16} className="text-blue-500" />}
-        label="Arduino"
-        className={`hidden sm:flex top-[3%] ${
-          isRTL ? "left-[3%]" : "right-[3%]"
-        } z-20`}
-      />
-      <Badge
-        icon={<Cpu size={16} className="text-blue-500" />}
-        label="Robotics"
-        className={`hidden sm:flex top-[44%] ${
-          isRTL ? "right-[-1%]" : "left-[-1%]"
-        } z-20`}
-      />
-      <Badge
-        icon={<Zap size={16} className="text-blue-500" />}
-        label="Electronics"
-        className={`hidden sm:flex bottom-[3%] ${
-          isRTL ? "left-[3%]" : "right-[3%]"
-        } z-20`}
-      />
-
-      <div
-        className={`hidden sm:flex absolute top-[12%] ${
-          isRTL ? "right-[0%]" : "left-[0%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
-      >
-        <Lightbulb size={16} />
-      </div>
-      <div
-        className={`hidden sm:flex absolute top-[2%] ${
-          isRTL ? "left-[20%]" : "right-[20%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
-      >
-        <Rocket size={16} />
-      </div>
-      <div
-        className={`hidden sm:flex absolute bottom-[40%] ${
-          isRTL ? "right-[-1%]" : "left-[-1%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
-      >
-        <Users size={16} />
       </div>
 
       <Img
         src="/images/hero/uno.webp"
-        alt="Arduino"
+        alt={t("hero.alt.arduino", "An Arduino Uno board")}
         loading="lazy"
-        className={`hidden sm:block absolute top-[5%] ${
-          isRTL ? "right-[15%]" : "left-[15%]"
-        } w-72 lg:w-80 -rotate-6 float-asset z-10`}
-        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
+        className={`absolute top-[4%] ${isRTL ? "right-[10%]" : "left-[10%]"} w-40 sm:w-56 lg:w-80 -rotate-6 float-asset z-10`}
+        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.35))" }}
       />
       <Img
         src="/images/hero/robocar.webp"
-        alt="Robocar"
-        fetchPriority="high"
-        className={`hidden sm:block absolute bottom-[22%] ${
-          isRTL ? "left-[-5%]" : "right-[-5%]"
-        } w-96 lg:w-[25rem] rotate-3 float-asset z-10`}
-        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
+        alt={t("hero.alt.robocar", "A robot car built by the club")}
+        loading="lazy"
+        className={`absolute bottom-[20%] ${isRTL ? "left-[-6%]" : "right-[-6%]"} w-52 sm:w-72 lg:w-[25rem] rotate-3 float-asset z-10`}
+        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.35))" }}
       />
       <Img
         src="/images/hero/bord.webp"
-        alt="Breadboard"
+        alt={t("hero.alt.breadboard", "A breadboard with wired components")}
         loading="lazy"
-        className={`hidden sm:block absolute bottom-[5%] ${
-          isRTL ? "right-[5%]" : "left-[5%]"
-        } w-44 lg:w-52 -rotate-3 float-asset z-10`}
-        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
+        className={`absolute bottom-[4%] ${isRTL ? "right-[2%]" : "left-[2%]"} w-28 sm:w-40 lg:w-52 -rotate-3 float-asset z-10`}
+        style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.35))" }}
+      />
+
+      {/* Three labels, spaced so they can't collide - the previous six chips
+          and icon bubbles overlapped each other at common widths. */}
+      <Badge
+        icon={<Code size={15} style={{ color: "var(--color-accent)" }} />}
+        label="Arduino"
+        className={`hidden sm:flex top-[1%] ${isRTL ? "left-[1%]" : "right-[1%]"}`}
+      />
+      <Badge
+        icon={<Cpu size={15} style={{ color: "var(--color-accent)" }} />}
+        label="Robotics"
+        className={`hidden sm:flex top-[46%] ${isRTL ? "right-[-2%]" : "left-[-2%]"}`}
+      />
+      <Badge
+        icon={<Zap size={15} style={{ color: "var(--color-accent)" }} />}
+        label="Electronics"
+        className={`hidden sm:flex bottom-[2%] ${isRTL ? "left-[1%]" : "right-[1%]"}`}
       />
     </div>
   );
@@ -341,109 +251,92 @@ function HeroRight() {
 
 function StatsBar() {
   const { t } = useTranslation("home");
-  const [eventCount, setEventCount] = useState(null);
-  const [projectCount, setProjectCount] = useState(null);
-  const [memberCount, setMemberCount] = useState(null);
+  const [data, setData] = useState(null);
   const [counts, setCounts] = useState({});
-  const [dataLoaded, setDataLoaded] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/stats")
-      .then((r) => r.json())
-      .then((data) => {
-        setEventCount(data.events);
-        setProjectCount(data.projects);
-        setMemberCount(data.members);
-        setDataLoaded(true);
-      })
-      .catch(() => setDataLoaded(true));
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("stats"))))
+      .then((d) => !cancelled && setData(d))
+      // Fall back to the published figures rather than leaving the row at zero.
+      .catch(() => !cancelled && setData({}));
+    return () => { cancelled = true; };
   }, []);
 
-  const stats = [
-    {
-      icon: <Users size={24} className="text-blue-500" />,
-      number: memberCount !== null ? `${memberCount}+` : "94+",
-      labelKey: "heroStats.members",
-    },
-    {
-      icon: <Wrench size={24} className="text-blue-500" />,
-      number: "7+",
-      labelKey: "heroStats.workshops",
-    },
-    {
-      icon: <Rocket size={24} className="text-blue-500" />,
-      number: projectCount !== null ? `${projectCount}+` : "15+",
-      labelKey: "heroStats.projects",
-    },
-    {
-      icon: <Trophy size={24} className="text-blue-500" />,
-      number: "10+",
-      labelKey: "heroStats.competitions",
-    },
-  ];
+  const stats = useMemo(() => [
+    { icon: Users, value: data?.members ?? 94, labelKey: "heroStats.members" },
+    { icon: Wrench, value: data?.workshops ?? 7, labelKey: "heroStats.workshops" },
+    { icon: Rocket, value: data?.projects ?? 15, labelKey: "heroStats.projects" },
+    { icon: Trophy, value: data?.competitions ?? 10, labelKey: "heroStats.competitions" },
+  ], [data]);
 
   useEffect(() => {
-    if (!dataLoaded) return;
+    if (!data) return;
     const el = ref.current;
     if (!el) return;
 
-    const animate = () => {
+    // Counting up is decoration; if motion is reduced, just state the numbers.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setCounts(Object.fromEntries(stats.map((s, i) => [i, s.value])));
+      return;
+    }
+
+    const timers = [];
+    const run = () => {
       stats.forEach((s, idx) => {
-        const val = parseInt(s.number);
-        if (isNaN(val)) {
-          setCounts((prev) => ({ ...prev, [idx]: s.number }));
-          return;
-        }
+        const step = Math.max(1, Math.ceil(s.value / 30));
         let current = 0;
-        const increment = Math.ceil(val / 30);
         const timer = setInterval(() => {
-          current += increment;
-          if (current >= val) {
-            current = val;
-            clearInterval(timer);
-          }
-          setCounts((prev) => ({
-            ...prev,
-            [idx]: current + (s.number.includes("+") ? "+" : ""),
-          }));
+          current = Math.min(current + step, s.value);
+          setCounts((prev) => ({ ...prev, [idx]: current }));
+          if (current >= s.value) clearInterval(timer);
         }, 40);
+        timers.push(timer);
       });
     };
 
-    if (el.getBoundingClientRect().top < window.innerHeight) {
-      animate();
-    } else {
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            animate();
-            observer.disconnect();
-          }
-        },
-        { threshold: 0.3 }
-      );
-      observer.observe(el);
-      return () => observer.disconnect();
-    }
-  }, [dataLoaded]);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          run();
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+
+    // Every one of these used to outlive the component - the intervals were
+    // never cleared, so navigating away left them ticking against a dead tree.
+    return () => {
+      observer.disconnect();
+      timers.forEach(clearInterval);
+    };
+  }, [data, stats]);
 
   return (
     <div
       ref={ref}
-      className="w-full bg-[#F1F5F9] border-t border-slate-200 py-6 md:py-12"
+      className="w-full border-t py-6 md:py-12"
+      style={{ background: 'var(--color-surface-alt)', borderColor: 'var(--color-border-light)' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-16 grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s, i) => (
           <div
-            key={i}
-            className="flex flex-col items-center justify-center text-center bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-6 md:py-8"
+            key={s.labelKey}
+            className="flex flex-col items-center justify-center text-center rounded-2xl shadow-sm px-4 py-6 md:py-8"
+            style={{ background: 'var(--color-card)', border: '1px solid var(--color-border-light)' }}
           >
-            <span className="text-blue-500 mb-3">{s.icon}</span>
-            <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F172A] mb-1">
-              {counts[i] || "0"}
+            <s.icon size={24} className="mb-3" style={{ color: 'var(--color-accent)' }} aria-hidden="true" />
+            <div
+              className="text-2xl sm:text-3xl lg:text-4xl mb-1"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
+            >
+              {counts[i] ?? 0}+
             </div>
-            <div className="text-xs sm:text-sm text-slate-500">
+            <div className="text-xs sm:text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {t(s.labelKey)}
             </div>
           </div>
@@ -455,8 +348,13 @@ function StatsBar() {
 
 export default function HeroSection() {
   return (
-    <section className="min-h-screen bg-[#EEF2FF] flex flex-col">
-      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-6 lg:gap-8 items-center max-w-7xl mx-auto w-full py-12 sm:py-20">
+    <section
+      className="flex flex-col min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-5rem)]"
+      style={{ background: 'var(--color-hero)' }}
+    >
+      {/* pt clears the fixed header, which was cropping the eyebrow on small
+          screens. */}
+      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-10 lg:gap-8 items-center max-w-7xl mx-auto w-full pt-24 pb-12 sm:pt-28 sm:pb-16 lg:py-20">
         <HeroLeft />
         <HeroRight />
       </div>

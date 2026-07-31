@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Menu, X } from 'lucide-react'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
+import ThemeToggle from '../shared/ThemeToggle'
 import Logo from '../shared/Logo'
+import useScrollLock from '../../hooks/useScrollLock'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
 const sidebarSpring = { type: 'spring', damping: 28, stiffness: 200 }
 const linkVariants = {
@@ -12,6 +15,8 @@ const linkVariants = {
   visible: (i) => ({ opacity: 1, x: 0, transition: { ...sidebarSpring, delay: 0.1 + i * 0.04 } }),
 }
 
+// "Join" is the call to action in the bar, so it isn't repeated in the link
+// row; the drawer shows it once, as a button at the end.
 const navLinks = [
   { key: 'home', path: '/' },
   { key: 'about', path: '/about' },
@@ -19,7 +24,6 @@ const navLinks = [
   { key: 'events', path: '/events' },
   { key: 'gallery', path: '/gallery' },
   { key: 'announcements', path: '/announcements' },
-  { key: 'join', path: '/join' },
   { key: 'contact', path: '/contact' },
 ]
 
@@ -29,8 +33,14 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const closeMobile = useCallback(() => setMobileOpen(false), [])
+
+  useScrollLock(mobileOpen)
+  const drawerRef = useFocusTrap(mobileOpen, closeMobile)
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30)
+    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
@@ -39,54 +49,64 @@ export default function Navbar() {
     setMobileOpen(false)
   }, [pathname])
 
-  const linkClass = ({ isActive }) =>
-    `nav-link ${isActive ? 'active' : ''}`
-
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-white"
+      className="fixed top-0 left-0 right-0 z-50 transition-shadow duration-300"
       style={{
-        borderBottom: '1px solid #E2E8F0',
-        backdropFilter: scrolled ? 'blur(16px)' : 'none',
-        boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,0.04)' : 'none',
+        background: 'var(--color-card)',
+        borderBottom: '1px solid var(--color-border-light)',
+        boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,0.06)' : 'none',
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 md:h-20">
-          <Link to="/" className="flex items-center gap-2.5 group">
+        <div className="flex items-center justify-between h-16 md:h-20 gap-4">
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 group shrink-0"
+            aria-label={t('nav.home')}
+          >
             <div className="transition-transform duration-300 group-hover:scale-105">
-              <Logo size={36} variant="black" />
+              <Logo size={36} decorative />
             </div>
             <span
-              className="font-bold text-base tracking-tight text-slate-800"
-              style={{ fontFamily: "'Minecraft', sans-serif", fontWeight: 700 }}
+              className="text-lg tracking-tight"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
             >
               AFAQ
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-0">
+          {/* Seven links don't fit beside the logo and CTA until ~1024px, so the
+              full row starts at lg and the drawer covers everything below. */}
+          <nav className="hidden lg:flex items-center" aria-label={t('nav.primary', 'Main')}>
             {navLinks.map(l => (
-              <NavLink key={l.key} to={l.path} className={linkClass}>
+              <NavLink
+                key={l.key}
+                to={l.path}
+                end={l.path === '/'}
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
                 {t(`nav.${l.key}`)}
               </NavLink>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle />
             <LanguageSwitcher />
-            <Link
-              to="/join"
-              className="hidden md:inline-flex items-center px-6 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 bg-[#0F172A] text-white hover:bg-blue-700"
-            >
+            <Link to="/join" className="hidden sm:inline-flex btn btn-primary btn-sm">
               {t('nav.join')}
             </Link>
             <button
-              className="md:hidden w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-slate-100 border border-slate-200 text-slate-500"
+              type="button"
+              className="lg:hidden w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+              style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
               onClick={() => setMobileOpen(true)}
-              aria-label="Open menu"
+              aria-label={t('nav.openMenu', 'Open menu')}
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-nav"
             >
-              <Menu size={18} />
+              <Menu size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -100,53 +120,48 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 md:hidden"
+              className="fixed inset-0 z-40 lg:hidden"
               style={{ background: 'rgba(0,0,0,0.5)' }}
-              onClick={() => setMobileOpen(false)}
+              onClick={closeMobile}
+              aria-hidden="true"
             />
             <motion.div
+              ref={drawerRef}
+              id="mobile-nav"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('nav.menu', 'Menu')}
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={sidebarSpring}
-              className="fixed top-0 right-0 h-full w-[280px] z-50 shadow-2xl md:hidden bg-white border-l border-gray-200"
+              className="fixed top-0 end-0 h-full w-[290px] max-w-[85vw] z-50 shadow-2xl lg:hidden overflow-y-auto"
+              style={{ background: 'var(--color-card)', borderInlineStart: '1px solid var(--color-border-light)' }}
             >
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <motion.div
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ ...sidebarSpring, delay: 0.05 }}
-                  className="flex items-center gap-2"
-                >
-                  <Logo size={32} />
-                  <span style={{ fontFamily: "'Minecraft', sans-serif", fontWeight: 700, fontSize: 16 }}>AFAQ</span>
-                </motion.div>
-                <motion.button
-                  initial={{ opacity: 0, rotate: -90 }}
-                  animate={{ opacity: 1, rotate: 0 }}
-                  transition={{ ...sidebarSpring, delay: 0.08 }}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5"
+              <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-light)' }}>
+                <div className="flex items-center gap-2">
+                  <Logo size={32} decorative />
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18 }}>AFAQ</span>
+                </div>
+                <button
+                  type="button"
+                  className="w-11 h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5 cursor-pointer"
                   style={{ color: 'var(--color-text-muted)' }}
-                  onClick={() => setMobileOpen(false)}
-                  aria-label="Close menu"
+                  onClick={closeMobile}
+                  aria-label={t('nav.closeMenu', 'Close menu')}
+                  data-autofocus
                 >
-                  <X size={18} />
-                </motion.button>
+                  <X size={20} aria-hidden="true" />
+                </button>
               </div>
-              <nav className="flex flex-col p-4 gap-1">
+
+              <nav className="flex flex-col p-4 gap-1" aria-label={t('nav.primary', 'Main')}>
                 {navLinks.map((l, i) => (
-                  <motion.div
-                    key={l.key}
-                    custom={i}
-                    variants={linkVariants}
-                    initial="hidden"
-                    animate="visible"
-                  >
+                  <motion.div key={l.key} custom={i} variants={linkVariants} initial="hidden" animate="visible">
                     <NavLink
                       to={l.path}
-                      className={({ isActive }) =>
-                        `block px-4 py-3 rounded-xl text-sm font-medium transition-colors`
-                      }
+                      end={l.path === '/'}
+                      className="block px-4 py-3 rounded-xl text-sm font-medium transition-colors"
                       style={({ isActive }) => ({
                         color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
                         background: isActive ? 'var(--color-accent-soft)' : 'transparent',
@@ -160,12 +175,10 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...sidebarSpring, delay: 0.35 }}
-                  className="mt-4 pt-4 border-t border-gray-200"
+                  className="mt-4 pt-4 border-t"
+                  style={{ borderColor: 'var(--color-border-light)' }}
                 >
-                  <Link
-                    to="/join"
-                    className="block w-full text-center px-4 py-3 rounded-2xl font-semibold text-sm transition-all bg-[#0F172A] text-white"
-                  >
+                  <Link to="/join" className="btn btn-primary btn-md w-full">
                     {t('nav.join')}
                   </Link>
                 </motion.div>

@@ -1,37 +1,43 @@
-import { useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { useEffect, lazy, Suspense } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import Layout from './components/layout/Layout'
-import ScrollToTop from './components/shared/ScrollToTop'
 import Home from './pages/Home'
-import About from './pages/About'
-import Projects from './pages/Projects'
-import Events from './pages/Events'
-import Gallery from './pages/Gallery'
-import JoinUs from './pages/JoinUs'
-import Registration from './pages/Registration'
-import Announcements from './pages/Announcements'
-import Contact from './pages/Contact'
+import RouteFallback from './components/shared/RouteFallback'
 
-// Admin
-import Login from './admin/pages/Login'
-import ResetPassword from './admin/pages/ResetPassword'
-import Dashboard from './admin/pages/Dashboard'
-import EventsPage from './admin/pages/EventsPage'
-import RegistrationsPage from './admin/pages/RegistrationsPage'
-import MembershipPage from './admin/pages/MembershipPage'
-import ProjectsPage from './admin/pages/ProjectsPage'
-import GalleryPage from './admin/pages/GalleryPage'
-import MessagesPage from './admin/pages/MessagesPage'
-import AnnouncementsPage from './admin/pages/AnnouncementsPage'
-import AdminUsersPage from './admin/pages/AdminUsersPage'
-import SettingsPage from './admin/pages/SettingsPage'
-import AIKnowledgePage from './admin/pages/AIKnowledgePage'
-import ProtectedRoute from './admin/components/guards/ProtectedRoute'
-import RoleGuard from './admin/components/guards/RoleGuard'
-import Chatbot from './components/chatbot/Chatbot'
+// Home ships in the initial bundle because it's the landing page. Everything
+// else loads on demand: the admin panel alone (13 pages, recharts, the table
+// stack) was ~60% of a 1.3 MB bundle that every public visitor downloaded.
+const About = lazy(() => import('./pages/About'))
+const Projects = lazy(() => import('./pages/Projects'))
+const Events = lazy(() => import('./pages/Events'))
+const Gallery = lazy(() => import('./pages/Gallery'))
+const JoinUs = lazy(() => import('./pages/JoinUs'))
+const Registration = lazy(() => import('./pages/Registration'))
+const Announcements = lazy(() => import('./pages/Announcements'))
+const Contact = lazy(() => import('./pages/Contact'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+const Chatbot = lazy(() => import('./components/chatbot/Chatbot'))
+
+const Login = lazy(() => import('./admin/pages/Login'))
+const ResetPassword = lazy(() => import('./admin/pages/ResetPassword'))
+const Dashboard = lazy(() => import('./admin/pages/Dashboard'))
+const EventsPage = lazy(() => import('./admin/pages/EventsPage'))
+const RegistrationsPage = lazy(() => import('./admin/pages/RegistrationsPage'))
+const MembershipPage = lazy(() => import('./admin/pages/MembershipPage'))
+const ProjectsPage = lazy(() => import('./admin/pages/ProjectsPage'))
+const GalleryPage = lazy(() => import('./admin/pages/GalleryPage'))
+const MessagesPage = lazy(() => import('./admin/pages/MessagesPage'))
+const AnnouncementsPage = lazy(() => import('./admin/pages/AnnouncementsPage'))
+const AdminUsersPage = lazy(() => import('./admin/pages/AdminUsersPage'))
+const SettingsPage = lazy(() => import('./admin/pages/SettingsPage'))
+const AIKnowledgePage = lazy(() => import('./admin/pages/AIKnowledgePage'))
+const ProtectedRoute = lazy(() => import('./admin/components/guards/ProtectedRoute'))
+const RoleGuard = lazy(() => import('./admin/components/guards/RoleGuard'))
 
 export default function App() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const isAdmin = pathname.startsWith('/admin')
 
   useEffect(() => {
     const hash = window.location.hash
@@ -42,44 +48,53 @@ export default function App() {
 
   return (
     <>
-      <ScrollToTop />
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/gallery" element={<Gallery />} />
-          <Route path="/join" element={<JoinUs />} />
-          <Route path="/register" element={<Registration />} />
-          <Route path="/announcements" element={<Announcements />} />
-          <Route path="/contact" element={<Contact />} />
-        </Route>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/join" element={<JoinUs />} />
+            <Route path="/register" element={<Registration />} />
+            <Route path="/announcements" element={<Announcements />} />
+            <Route path="/contact" element={<Contact />} />
+            {/* Unknown URLs used to render a blank page inside the layout. */}
+            <Route path="*" element={<NotFound />} />
+          </Route>
 
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={<Login />} />
-        <Route path="/admin/reset-password" element={<ResetPassword />} />
-        <Route path="/admin" element={<ProtectedRoute />}>
-          <Route index element={<Dashboard />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="registrations" element={<RegistrationsPage />} />
-          <Route path="membership" element={<MembershipPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
-          <Route path="gallery" element={<GalleryPage />} />
-          <Route path="messages" element={<MessagesPage />} />
-          <Route path="announcements" element={<AnnouncementsPage />} />
-          <Route path="admins" element={
-            <RoleGuard role="super_admin"><AdminUsersPage /></RoleGuard>
-          } />
-          <Route path="settings" element={
-            <RoleGuard role="super_admin"><SettingsPage /></RoleGuard>
-          } />
-          <Route path="ai-knowledge" element={
-            <RoleGuard role="super_admin"><AIKnowledgePage /></RoleGuard>
-          } />
-        </Route>
-      </Routes>
-      <Chatbot />
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<Login />} />
+          <Route path="/admin/reset-password" element={<ResetPassword />} />
+          <Route path="/admin" element={<ProtectedRoute />}>
+            <Route index element={<Dashboard />} />
+            <Route path="events" element={<EventsPage />} />
+            <Route path="registrations" element={<RegistrationsPage />} />
+            <Route path="membership" element={<MembershipPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="gallery" element={<GalleryPage />} />
+            <Route path="messages" element={<MessagesPage />} />
+            <Route path="announcements" element={<AnnouncementsPage />} />
+            <Route path="admins" element={
+              <RoleGuard role="super_admin"><AdminUsersPage /></RoleGuard>
+            } />
+            <Route path="settings" element={
+              <RoleGuard role="super_admin"><SettingsPage /></RoleGuard>
+            } />
+            <Route path="ai-knowledge" element={
+              <RoleGuard role="super_admin"><AIKnowledgePage /></RoleGuard>
+            } />
+          </Route>
+        </Routes>
+      </Suspense>
+
+      {/* The club's public assistant has no business inside the admin panel. */}
+      {!isAdmin && (
+        <Suspense fallback={null}>
+          <Chatbot />
+        </Suspense>
+      )}
     </>
   )
 }

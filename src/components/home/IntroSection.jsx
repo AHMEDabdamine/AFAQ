@@ -12,12 +12,14 @@ export default function IntroSection() {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/page-content/home_intro")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.image_url) setAboutImage(data.image_url);
+        if (!cancelled && data?.image_url) setAboutImage(data.image_url);
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -33,8 +35,10 @@ export default function IntroSection() {
           transition={spring}
           className="max-w-3xl mx-auto text-center"
         >
-          <div className="eyebrow eyebrow-center mb-5" />
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight mb-6">
+          <div className="eyebrow eyebrow-center mb-5">
+            {t("intro.eyebrow", "Who we are")}
+          </div>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl mb-6">
             {t("intro.title")}
           </h2>
           <p
@@ -45,46 +49,35 @@ export default function IntroSection() {
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-30px" }}
-          transition={{ ...spring, delay: 0.15 }}
-          className="relative mx-auto mt-16 overflow-hidden rounded-2xl"
-          style={{
-            maxWidth: 1000,
-            aspectRatio: "21/9",
-            background:
-              "linear-gradient(135deg, #0A1628 0%, #1a202c 50%, #0d1117 100%)",
-            boxShadow:
-              "0 0 60px rgba(0, 0, 0, 0.25), 0 0 120px rgba(0, 0, 0, 0.1)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
-        >
-          <div
-            className="absolute inset-0"
+        {/* Only rendered once there's something to show. It used to draw a
+            1000x430 empty dark panel whenever the endpoint returned no image,
+            leaving a large blank band in the middle of the page. */}
+        {aboutImage && (
+          <motion.figure
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-30px" }}
+            transition={{ ...spring, delay: 0.15 }}
+            className="relative mx-auto mt-16 overflow-hidden rounded-2xl m-0"
             style={{
-              background:
-                "radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.05) 0%, transparent 60%), radial-gradient(circle at 70% 60%, rgba(255, 255, 255, 0.03) 0%, transparent 50%)",
+              maxWidth: 1000,
+              aspectRatio: "21/9",
+              background: "var(--color-bg-alt)",
+              border: "1px solid var(--color-border-light)",
+              boxShadow: "0 20px 60px rgba(6, 12, 24, 0.18)",
             }}
-          />
-          <div
-            className="absolute"
-            style={{
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: 300,
-              height: 300,
-              background:
-                "radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, transparent 70%)",
-              pointerEvents: "none",
-            }}
-          />
-          {aboutImage && (
-            <img src={aboutImage} alt="" className="absolute inset-0 w-full h-full object-cover z-10" />
-          )}
-        </motion.div>
+          >
+            <img
+              src={aboutImage}
+              alt={t("intro.imageAlt", "Club members at work")}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImgLoaded(true)}
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+              style={{ opacity: imgLoaded ? 1 : 0 }}
+            />
+          </motion.figure>
+        )}
       </div>
     </section>
   );

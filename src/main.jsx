@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { ThemeProvider } from './contexts/ThemeContext'
+import { MotionConfig } from 'framer-motion'
 import App from './App'
 import './i18n/config'
 import './index.css'
@@ -9,9 +9,11 @@ import './index.css'
 ReactDOM.createRoot(document.getElementById('app')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <ThemeProvider>
+      {/* reducedMotion="user" makes every framer-motion transform and layout
+          animation on the site honour the OS setting, in one place. */}
+      <MotionConfig reducedMotion="user">
         <App />
-      </ThemeProvider>
+      </MotionConfig>
     </BrowserRouter>
   </React.StrictMode>
 )

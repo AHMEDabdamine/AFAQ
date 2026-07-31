@@ -1,45 +1,63 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowUpRight } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Loader2 } from 'lucide-react'
 
-export function Button({ children, to, href, variant = 'primary', size = 'md', className = '', icon, ...props }) {
-  const base = 'inline-flex items-center justify-center gap-2 font-semibold transition-all duration-200 cursor-pointer'
+/**
+ * One button, four looks. Variants live in index.css (.btn-*) so hover, active,
+ * focus-visible and disabled states are all expressible - inline styles can't
+ * carry pseudo-classes, which is why none of those states worked before.
+ */
+export function Button({
+  children,
+  to,
+  href,
+  variant = 'primary',
+  size = 'md',
+  className = '',
+  icon,
+  loading = false,
+  disabled = false,
+  ...props
+}) {
+  const classes = `btn btn-${variant} btn-${size} ${className}`.trim()
 
-  const sizes = {
-    sm: 'px-4 py-2 text-sm rounded-2xl',
-    md: 'px-7 py-3.5 text-sm rounded-2xl',
-    lg: 'px-8 py-4 text-base rounded-2xl',
+  const content = (
+    <>
+      {loading && <Loader2 size={16} className="btn-icon animate-spin" aria-hidden="true" />}
+      <span>{children}</span>
+      {!loading && icon === 'arrow' && <ArrowRight size={16} className="btn-icon" aria-hidden="true" />}
+      {!loading && icon === 'external' && <ArrowUpRight size={16} className="btn-icon" aria-hidden="true" />}
+    </>
+  )
+
+  // A disabled link isn't a thing in HTML, so render it as an inert span that
+  // still announces its state.
+  if (to && !disabled) {
+    return <Link to={to} className={classes} {...props}>{content}</Link>
   }
 
-  const variants = {
-    primary: {
-      background: '#0F172A',
-      color: '#fff',
-      border: 'none',
-    },
-    outline: {
-      background: '#fff',
-      color: '#0F172A',
-      border: '2px solid #0F172A',
-    },
-    ghost: {
-      background: 'transparent',
-      color: 'var(--color-text-muted)',
-      border: 'none',
-    },
-    white: {
-      background: '#fff',
-      color: '#0A1628',
-      border: 'none',
-    },
+  if (href && !disabled) {
+    return (
+      <a
+        className={classes}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        {...props}
+      >
+        {content}
+      </a>
+    )
   }
 
-  const style = variants[variant]
+  if (to || href) {
+    return <span className={classes} aria-disabled="true" role="link">{content}</span>
+  }
 
-  const classes = `${base} ${sizes[size]} ${className}`
-
-  const content = <><span>{children}</span>{icon === 'arrow' && <ArrowRight size={16} />}{icon === 'external' && <ArrowUpRight size={16} />}</>
-
-  if (to) return <Link to={to} className={classes} style={style}>{content}</Link>
-  if (href) return <a href={href} className={classes} style={style} target="_blank" rel="noopener noreferrer">{content}</a>
-  return <button className={classes} style={style} {...props}>{content}</button>
+  return (
+    <button className={classes} disabled={disabled || loading} {...props}>
+      {content}
+    </button>
+  )
 }
+
+export default Button

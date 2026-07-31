@@ -11,10 +11,29 @@
     <meta name="description" content="AFAQ Scientific Club — University of Akli Mohand Oulhadj, Bouira, Algeria" />
 
     <link rel="preload" href="/fonts/Minecraft.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/unixel-Regular.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="preload" href="/images/hero/robocar.webp" as="image" fetchpriority="high" />
+    <link rel="preload" href="/fonts/plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/images/hero/bolt.webp" as="image" fetchpriority="high" />
+
+    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a1420" media="(prefers-color-scheme: dark)" />
 
     <title>AFAQ Scientific Club</title>
+
+    <!-- Set the theme before first paint. Doing this in React instead makes
+         dark-mode visitors watch the page flash white on every load. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('afaq-theme');
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

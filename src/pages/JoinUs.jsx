@@ -154,7 +154,7 @@ export default function JoinUs() {
 
   const inputStyle = (field) => ({
     background: 'var(--color-bg)',
-    border: `1.5px solid ${errors[field] ? '#EF4444' : 'var(--color-border-light)'}`,
+    border: `1.5px solid ${errors[field] ? 'var(--color-danger)' : 'var(--color-border-light)'}`,
     borderRadius: 100,
     padding: '16px 20px',
     fontSize: 15,
@@ -224,7 +224,7 @@ export default function JoinUs() {
                     height: 72,
                     borderRadius: '50%',
                     background: 'rgba(22, 163, 74, 0.1)',
-                    color: '#16A34A',
+                    color: 'var(--color-success)',
                   }}
                 >
                   <Check size={36} style={{ strokeWidth: 3 }} />
@@ -310,7 +310,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.full_name && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.full_name}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.full_name}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -330,7 +330,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.student_id && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.student_id}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.student_id}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -351,7 +351,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.email && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.email}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.email}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -394,7 +394,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.department && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.department}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.department}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -418,7 +418,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.study_year && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.study_year}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.study_year}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -483,7 +483,7 @@ export default function JoinUs() {
                           </motion.div>
                           <AnimatePresence>
                             {errors.motivation && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.motivation}</motion.p>
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: 'var(--color-danger)' }}>{errors.motivation}</motion.p>
                             )}
                           </AnimatePresence>
                         </div>
@@ -494,10 +494,10 @@ export default function JoinUs() {
 
                 <AnimatePresence>
                   {status === 'error' && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: '#EF4444' }}>{t('form.error')}</motion.p>
+                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: 'var(--color-danger)' }}>{t('form.error')}</motion.p>
                   )}
                   {errors.duplicate && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: '#EF4444' }}>{errors.duplicate}</motion.p>
+                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: 'var(--color-danger)' }}>{errors.duplicate}</motion.p>
                   )}
                 </AnimatePresence>
 
@@ -564,7 +564,7 @@ export default function JoinUs() {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="text-sm mt-3"
-                      style={{ color: '#16A34A' }}
+                      style={{ color: 'var(--color-success)' }}
                     >
                       ✓ Form filled from your Progres account — please review before submitting.
                     </motion.p>

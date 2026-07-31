@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useId } from "react";
 
 const leftImages = [
   "/images/side/pi-removed-bg.webp",
@@ -11,41 +11,39 @@ const rightImages = [
   "/images/side/breadbord.webp",
 ];
 
-const counters = { left: 0, right: 0 };
+const SCALE = [
+  [/esp32|robocar/, 1.35],
+  [/breadbord|pi-/, 1.3],
+];
 
-function pickForId(id, pool) {
-  const limited = pool.filter((p) => !p.includes("robocar"));
-  const poolSize = pool.length;
-  const limitedSize = limited.length;
-
-  if (id <= poolSize) return pool[id - 1];
-  const idx = id - poolSize - 1;
-  if (idx < limitedSize) return limited[idx];
-  return limited[(idx - limitedSize) % limitedSize];
-}
-
+/**
+ * Decorative hardware drifting in the page margins.
+ *
+ * Which image appears is derived from React's own instance id rather than a
+ * module-level counter: the counter was mutated during render, so StrictMode's
+ * double render advanced it twice and the choice changed between renders.
+ */
 export default function SideImage({ side = "left", offsetY = 0, size = 380 }) {
-  const ref = useRef(0);
-  if (ref.current === 0) ref.current = ++counters[side];
-
+  const id = useId();
   const pool = side === "left" ? leftImages : rightImages;
-  const src = pickForId(ref.current, pool);
-  const multiplier = src.includes("esp32")
-    ? 1.35
-    : src.includes("robocar")
-    ? 1.35
-    : src.includes("breadbord")
-    ? 1.3
-    : src.includes("pi")
-    ? 1.3
-    : 1;
+
+  // Stable hash of the instance id -> stable pick for the life of the element.
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  const src = pool[hash % pool.length];
+
+  const multiplier = SCALE.find(([re]) => re.test(src))?.[1] ?? 1;
   const actualSize = Math.floor(size * multiplier);
+
   return (
     <img
       src={src}
       alt=""
+      aria-hidden="true"
       draggable={false}
-      className="absolute pointer-events-none select-none -z-10 animate-float-slow"
+      loading="lazy"
+      decoding="async"
+      className="absolute pointer-events-none select-none -z-10 animate-float-slow hidden lg:block"
       style={{
         top: "50%",
         [side]: `${-Math.floor(actualSize * 0.3)}px`,

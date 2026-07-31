@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 
 const suggestions = [
@@ -11,17 +12,19 @@ const suggestions = [
 ]
 
 export default function SuggestedQuestions({ onSelect, lang }) {
+  const { t } = useTranslation()
   return (
     <div className="px-3 md:px-4 py-2 md:py-3 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
       <div className="flex items-center gap-1.5 mb-2">
-        <Sparkles size={12} style={{ color: 'var(--color-accent)' }} />
+        <Sparkles size={12} style={{ color: 'var(--color-accent)' }} aria-hidden="true" />
         <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
-          {lang === 'ar' ? 'أسئلة مقترحة' : lang === 'fr' ? 'Questions suggérées' : 'Suggested questions'}
+          {t('chat.suggested', 'Suggested questions')}
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
         {suggestions.map((s, i) => (
           <motion.button
+            type="button"
             key={i}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

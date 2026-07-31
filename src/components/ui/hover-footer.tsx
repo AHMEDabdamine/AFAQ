@@ -1,6 +1,6 @@
 "use client";
 import React, { useRef, useEffect, useState } from "react";
-import { motion, useInView } from "motion/react";
+import { motion, useInView } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export const TextHoverEffect = ({
@@ -48,8 +48,10 @@ export const TextHoverEffect = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onMouseMove={(e) => setCursor({ x: e.clientX, y: e.clientY })}
-      className={cn("select-none uppercase cursor-pointer", className)}
-      style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+      className={cn("select-none uppercase", className)}
+      // Was Helvetica - the one place on the site running a font that isn't
+      // part of the type system.
+      style={{ fontFamily: "var(--font-display)" }}
     >
       <defs>
         <linearGradient
@@ -142,10 +144,11 @@ export const TextHoverEffect = ({
 export const FooterBackgroundGradient = () => {
   return (
     <div
-      className="absolute inset-0 z-0"
+      className="absolute inset-0 z-0 pointer-events-none"
+      aria-hidden="true"
       style={{
         background:
-          "radial-gradient(125% 125% at 50% 10%, #0F0F1166 50%, #3ca2fa33 100%)",
+          "radial-gradient(125% 125% at 50% 10%, transparent 45%, #3ca2fa26 100%)",
       }}
     />
   );

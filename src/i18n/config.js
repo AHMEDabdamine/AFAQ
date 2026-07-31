@@ -42,9 +42,14 @@ import enAnnouncements from '../locales/en/announcements.json'
 import arAnnouncements from '../locales/ar/announcements.json'
 import frAnnouncements from '../locales/fr/announcements.json'
 
-const savedLang = localStorage.getItem('i18nextLng') || 'en'
-document.documentElement.dir = savedLang === 'ar' ? 'rtl' : 'ltr'
-document.documentElement.lang = savedLang
+export const RTL_LANGUAGES = ['ar']
+
+/** Keep the document direction and lang in step with the active language. */
+function applyDocumentLanguage(lng) {
+  const base = (lng || 'en').split('-')[0]
+  document.documentElement.dir = RTL_LANGUAGES.includes(base) ? 'rtl' : 'ltr'
+  document.documentElement.lang = base
+}
 
 i18n
   .use(LanguageDetector)
@@ -96,6 +101,13 @@ i18n
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
     },
+    interpolation: { escapeValue: false },
   })
+
+// Derive direction from the language the detector actually resolved, not from a
+// separate localStorage read - those disagreed for first-time visitors whose
+// browser language was Arabic or French.
+applyDocumentLanguage(i18n.resolvedLanguage || i18n.language)
+i18n.on('languageChanged', applyDocumentLanguage)
 
 export default i18n

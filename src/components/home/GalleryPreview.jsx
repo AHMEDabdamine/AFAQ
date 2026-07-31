@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, Expand } from 'lucide-react'
 import Lightbox from '../shared/Lightbox'
 import SideImage from '../shared/SideImage'
@@ -45,8 +45,8 @@ export default function GalleryPreview() {
       <SideImage side="right" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8 md:mb-12">
-          <div className="eyebrow eyebrow-center mb-2 md:mb-4">{t('gallery.title')}</div>
-          <h2 className="text-2xl md:text-4xl font-bold">{t('gallery.title')}</h2>
+          <div className="eyebrow eyebrow-center mb-2 md:mb-4">{t('gallery.eyebrow', 'From the workbench')}</div>
+          <h2 className="text-2xl md:text-4xl">{t('gallery.title')}</h2>
         </div>
 
         <div className="hidden md:grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '180px' }}>
@@ -60,7 +60,8 @@ export default function GalleryPreview() {
                 viewport={{ once: true, margin: '-30px' }}
                 transition={{ ...spring, delay: i * 0.08 }}
                 onClick={() => setLightboxIndex(i)}
-                className="relative overflow-hidden rounded-2xl group cursor-pointer border-0 outline-none"
+                className="relative overflow-hidden rounded-2xl group cursor-pointer border-0"
+                aria-label={t('gallery.openImage', 'Open image {{number}}', { number: i + 1 })}
                 style={{ gridRow: s.row, gridColumn: s.col }}
               >
                 <img src={url} alt="" className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105 group-hover:brightness-[1.05]" loading="lazy" />
@@ -90,7 +91,8 @@ export default function GalleryPreview() {
                 viewport={{ once: true }}
                 transition={{ ...spring, delay: i * 0.06 }}
                 onClick={() => setLightboxIndex(i)}
-                className="relative overflow-hidden rounded-xl group cursor-pointer border-0 outline-none"
+                className="relative overflow-hidden rounded-xl group cursor-pointer border-0"
+                aria-label={t('gallery.openImage', 'Open image {{number}}', { number: i + 1 })}
                 style={{
                   gridColumn: `span ${l.colSpan}`,
                   aspectRatio: l.aspect,
@@ -103,22 +105,26 @@ export default function GalleryPreview() {
         </div>
 
         <div className="text-center mt-10">
-          <Link to="/gallery" className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200"
-            style={{ background: '#fff', color: '#0F172A', border: '2px solid #0F172A' }}>
-            {t('gallery.viewAll')} <ChevronRight size={15} />
+          <Link to="/gallery" className="btn btn-outline btn-md">
+            {t('gallery.viewAll')}
+            <ChevronRight size={15} className="btn-icon" aria-hidden="true" />
           </Link>
         </div>
       </div>
 
-      {lightboxIndex !== null && (
-        <Lightbox
-          images={images}
-          currentIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onPrev={showPrev}
-          onNext={showNext}
-        />
-      )}
+      {/* AnimatePresence has to live outside Lightbox for its exit animation to
+          run at all - it was previously nested inside its own child. */}
+      <AnimatePresence>
+        {lightboxIndex !== null && (
+          <Lightbox
+            images={images}
+            currentIndex={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onPrev={showPrev}
+            onNext={showNext}
+          />
+        )}
+      </AnimatePresence>
     </section>
   )
 }
