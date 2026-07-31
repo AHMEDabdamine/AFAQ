@@ -1,165 +1,317 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit3, Trash2, Pin, PinOff } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { CalendarClock, Eye, EyeOff, Loader2, Megaphone, Pencil, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { logActivity, read, run, supabase } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import useQueryParam from '../hooks/useQueryParam'
+import { formatDateTime, relativeTime, toForm } from '../lib/format'
+import PageHeader, { FilterTabs } from '../components/ui/PageHeader'
+import Panel from '../components/ui/Panel'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Skeleton from '../components/ui/Skeleton'
-import EmptyState from '../components/ui/EmptyState'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Badge, { StatusBadge } from '../components/ui/Badge'
+import { SkeletonPanel } from '../components/ui/Skeleton'
+import { CheckField, LocalizedField, TextField } from '../components/ui/Field'
+
+const BLANK = {
+  title_en: '', title_ar: '', title_fr: '',
+  content_en: '', content_ar: '', content_fr: '',
+  is_pinned: false, is_published: true, scheduled_at: '',
+}
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'live', label: 'Live' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'draft', label: 'Drafts' },
+]
+
+/** Published, but dated in the future — live on the site only once that passes. */
+const isScheduled = a => a.is_published && a.scheduled_at && new Date(a.scheduled_at) > new Date()
+
+const stateOf = a => (!a.is_published ? 'draft' : isScheduled(a) ? 'scheduled' : 'live')
 
 export default function AnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
-  const [editing, setEditing] = useState(null)
-  const [saving, setSaving] = useState(false)
   const adminProfile = useAdminStore(s => s.adminProfile)
-  const addToast = useAdminStore(s => s.addToast)
 
-  const [form, setForm] = useState({
-    title_en: '', title_ar: '', title_fr: '',
-    content_en: '', content_ar: '', content_fr: '',
-    is_pinned: false, is_published: true,
-  })
+  const [items, setItems] = useState([])
+  const [state, setState] = useState({ loading: true, error: null })
+  const [status, setStatus] = useQueryParam('status', 'all')
+  const [newFlag, setNewFlag] = useQueryParam('new')
 
-  useEffect(() => { loadAnnouncements() }, [])
+  const [editor, setEditor] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [working, setWorking] = useState({})
 
-  const loadAnnouncements = async () => {
-    const { data } = await supabase.from('announcements').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
-    setAnnouncements(data || [])
-    setLoading(false)
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const { ok, data, message } = await read(
+      supabase.from('announcements').select('*')
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+    )
+    if (!ok) { setState({ loading: false, error: message }); return }
+    setItems(data || [])
+    setState({ loading: false, error: null })
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (newFlag) { setEditor({ item: null }); setNewFlag('') }
+  }, [newFlag, setNewFlag])
+
+  const filtered = useMemo(
+    () => (status === 'all' ? items : items.filter(a => stateOf(a) === status)),
+    [items, status]
+  )
+
+  const filterOptions = FILTERS.map(f => ({
+    ...f,
+    count: f.value === 'all' ? items.length : items.filter(a => stateOf(a) === f.value).length,
+  }))
+
+  const toggle = async (item, field, labels) => {
+    setWorking(w => ({ ...w, [item.id]: true }))
+    const next = !item[field]
+    const { ok } = await run(
+      supabase.from('announcements').update({ [field]: next }).eq('id', item.id),
+      { success: next ? labels.on : labels.off, failure: 'That switch did not change.' }
+    )
+    setWorking(w => ({ ...w, [item.id]: false }))
+    if (ok) load()
   }
 
-  const openCreate = () => {
-    setEditing(null)
-    setForm({ title_en: '', title_ar: '', title_fr: '', content_en: '', content_ar: '', content_fr: '', is_pinned: false, is_published: true })
-    setModalOpen(true)
-  }
-
-  const openEdit = (a) => {
-    setEditing(a)
-    setForm({
-      title_en: a.title_en || '', title_ar: a.title_ar || '', title_fr: a.title_fr || '',
-      content_en: a.content_en || '', content_ar: a.content_ar || '', content_fr: a.content_fr || '',
-      is_pinned: a.is_pinned || false, is_published: a.is_published !== false,
-    })
-    setModalOpen(true)
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    const payload = { ...form, created_by: adminProfile?.user_id }
-    if (editing) {
-      await supabase.from('announcements').update(payload).eq('id', editing.id)
-      addToast('Announcement updated')
-    } else {
-      await supabase.from('announcements').insert(payload)
-      addToast('Announcement created')
+  const remove = async () => {
+    const { ok } = await run(
+      supabase.from('announcements').delete().eq('id', pendingDelete.id),
+      { success: 'Announcement deleted.', failure: 'The announcement was not deleted.' }
+    )
+    if (ok) {
+      logActivity('deleted', 'announcements', pendingDelete.id, { name: pendingDelete.title_en })
+      setPendingDelete(null)
+      load()
     }
-    setSaving(false)
-    setModalOpen(false)
-    loadAnnouncements()
   }
-
-  const togglePin = async (a) => {
-    await supabase.from('announcements').update({ is_pinned: !a.is_pinned }).eq('id', a.id)
-    loadAnnouncements()
-  }
-
-  const handleDelete = async () => {
-    await supabase.from('announcements').delete().eq('id', deleteId)
-    addToast('Announcement deleted')
-    setDeleteId(null)
-    loadAnnouncements()
-  }
-
-  if (loading) return <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} style={{ height: 48 }} />)}</div>
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Club announcements</p>
-        <button onClick={openCreate} className="admin-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-          <Plus size={16} /> New Announcement
-        </button>
+    <div>
+      <PageHeader
+        eyebrow="Publish"
+        title="Announcements"
+        description="Short notices shown on the site. Pinned ones sit at the top of the list."
+        actions={<Button variant="primary" icon={Plus} onClick={() => setEditor({ item: null })}>New announcement</Button>}
+      />
+
+      <div className="mb-4">
+        <FilterTabs options={filterOptions} value={status} onChange={setStatus} label="Announcement filter" />
       </div>
 
-      {announcements.length === 0 ? (
-        <EmptyState icon={Edit3} title="No announcements yet" action={
-          <button onClick={openCreate} className="admin-btn-primary mt-4 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>Create Announcement</button>
-        } />
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
+      ) : state.loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonPanel key={i} rows={2} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Panel>
+          {items.length === 0 ? (
+            <EmptyState
+              icon={Megaphone}
+              title="No announcements yet"
+              description="Post a notice when something changes — a new workshop, a deadline, a room move."
+              action={<Button variant="primary" icon={Plus} onClick={() => setEditor({ item: null })}>New announcement</Button>}
+            />
+          ) : (
+            <EmptyState compact icon={Megaphone} title={`Nothing ${status}`} description="Try another filter." />
+          )}
+        </Panel>
       ) : (
         <div className="space-y-3">
-          {announcements.map(a => (
-            <motion.div
-              key={a.id}
-              initial={{ opacity: 0, y: 4 }}
+          {filtered.map((item, index) => (
+            <motion.article
+              key={item.id}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border p-5"
-              style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}
+              transition={{ delay: Math.min(index * 0.03, 0.2) }}
+              className="adm-panel p-4 sm:p-5"
+              style={item.is_pinned ? { borderColor: 'var(--adm-signal-edge)' } : undefined}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    {a.is_pinned && <Pin size={12} style={{ color: 'var(--color-accent)' }} />}
-                    <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{a.title_en}</h3>
-                    {!a.is_published && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: '#d9770620', color: '#d97706' }}>Draft</span>}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    {item.is_pinned && (
+                      <Badge tone="signal"><Pin size={11} /> Pinned</Badge>
+                    )}
+                    <h3 className="text-[15px] leading-tight">{item.title_en}</h3>
+                    <StatusBadge status={stateOf(item)} />
                   </div>
-                  <p className="text-xs line-clamp-2" style={{ color: 'var(--color-text-muted)' }}>{a.content_en}</p>
+                  <p className="text-sm adm-clamp-2" style={{ color: 'var(--adm-silk-dim)' }}>
+                    {item.content_en || 'No English body text.'}
+                  </p>
+                  <p className="adm-data text-[11px] mt-2.5" style={{ color: 'var(--adm-silk-faint)' }}>
+                    {isScheduled(item)
+                      ? `Goes live ${formatDateTime(item.scheduled_at)}`
+                      : `Posted ${relativeTime(item.created_at)}`}
+                  </p>
                 </div>
-                <div className="flex gap-1 ml-4">
-                  <button onClick={() => togglePin(a)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}>
-                    {a.is_pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  </button>
-                  <button onClick={() => openEdit(a)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}><Edit3 size={14} /></button>
-                  <button onClick={() => setDeleteId(a.id)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: '#dc2626' }}><Trash2 size={14} /></button>
+
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {working[item.id] && <Loader2 size={14} className="adm-spin mr-1" style={{ color: 'var(--adm-silk-faint)' }} />}
+                  <IconButton
+                    icon={item.is_pinned ? PinOff : Pin}
+                    label={item.is_pinned ? 'Unpin' : 'Pin to the top'}
+                    disabled={working[item.id]}
+                    onClick={() => toggle(item, 'is_pinned', { on: 'Pinned to the top.', off: 'Unpinned.' })}
+                  />
+                  <IconButton
+                    icon={item.is_published ? EyeOff : Eye}
+                    label={item.is_published ? 'Unpublish' : 'Publish'}
+                    disabled={working[item.id]}
+                    onClick={() => toggle(item, 'is_published', {
+                      on: 'Published to the site.',
+                      off: 'Hidden from the site.',
+                    })}
+                  />
+                  <IconButton icon={Pencil} label="Edit" onClick={() => setEditor({ item })} />
+                  <IconButton icon={Trash2} label="Delete" danger onClick={() => setPendingDelete(item)} />
                 </div>
               </div>
-            </motion.div>
+            </motion.article>
           ))}
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Announcement' : 'New Announcement'} size="lg">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['en', 'ar', 'fr'].map(lang => (
-              <div key={lang}>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Title ({lang.toUpperCase()})</label>
-                <input value={form[`title_${lang}`]} onChange={e => setForm({...form, [`title_${lang}`]: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['en', 'ar', 'fr'].map(lang => (
-              <div key={lang}>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Content ({lang.toUpperCase()})</label>
-                <textarea value={form[`content_${lang}`]} onChange={e => setForm({...form, [`content_${lang}`]: e.target.value})} rows={4} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-6">
-            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={form.is_pinned} onChange={e => setForm({...form, is_pinned: e.target.checked})} />
-              Pinned
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published: e.target.checked})} />
-              Published
-            </label>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
-            <button onClick={() => setModalOpen(false)} className="admin-btn px-4 py-2 rounded-xl text-sm font-medium border" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-              {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <AnnouncementEditor
+        key={editor?.item?.id || 'new'}
+        open={!!editor}
+        item={editor?.item}
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); load() }}
+        createdBy={adminProfile?.user_id}
+      />
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Announcement" message="Are you sure?" />
-    </motion.div>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title="Delete this announcement?"
+        message={pendingDelete ? `“${pendingDelete.title_en}” will be removed from the site. This cannot be undone.` : ''}
+        confirmLabel="Delete announcement"
+      />
+    </div>
+  )
+}
+
+function AnnouncementEditor({ open, item, onClose, onSaved, createdBy }) {
+  const [form, setForm] = useState(BLANK)
+  const [lang, setLang] = useState('en')
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setForm(item
+      ? {
+        ...toForm(BLANK, item),
+        // datetime-local wants `YYYY-MM-DDTHH:mm` with no zone.
+        scheduled_at: item.scheduled_at ? new Date(item.scheduled_at).toISOString().slice(0, 16) : '',
+      }
+      : BLANK)
+    setErrors({})
+    setLang('en')
+  }, [open, item])
+
+  const set = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  const save = async () => {
+    const next = {}
+    if (!form.title_en.trim()) next.title_en = 'An English title is required — it is what the site shows.'
+    if (!form.content_en.trim()) next.content_en = 'Write the notice itself.'
+    if (Object.keys(next).length) { setErrors(next); setLang('en'); return }
+
+    setSaving(true)
+    const payload = {
+      title_en: form.title_en.trim(), title_ar: form.title_ar.trim() || null, title_fr: form.title_fr.trim() || null,
+      content_en: form.content_en, content_ar: form.content_ar || null, content_fr: form.content_fr || null,
+      is_pinned: form.is_pinned,
+      is_published: form.is_published,
+      scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
+    }
+
+    const { ok } = await run(
+      item
+        ? supabase.from('announcements').update(payload).eq('id', item.id)
+        : supabase.from('announcements').insert({ ...payload, created_by: createdBy }),
+      {
+        success: item ? 'Announcement updated.' : 'Announcement posted.',
+        failure: 'The announcement did not save.',
+      }
+    )
+    setSaving(false)
+    if (ok) onSaved()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      title={item ? 'Edit announcement' : 'New announcement'}
+      description="Keep it to a sentence or two. Arabic and French are optional."
+      footer={
+        <>
+          <Button onClick={onClose} data-dialog-dismiss="true">Cancel</Button>
+          <Button variant="primary" onClick={save} busy={saving} busyLabel="Saving…">
+            {item ? 'Save changes' : 'Post announcement'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <LocalizedField
+          label="Title" prefix="title" required
+          values={form} onChange={set} lang={lang} onLangChange={setLang} error={errors.title_en}
+        />
+        <LocalizedField
+          label="Notice" prefix="content" required multiline rows={5}
+          values={form} onChange={set} lang={lang} onLangChange={setLang} error={errors.content_en}
+        />
+
+        <TextField
+          label="Go live at"
+          type="datetime-local"
+          hint="Leave empty to publish immediately."
+          value={form.scheduled_at}
+          onChange={e => set('scheduled_at', e.target.value)}
+        />
+
+        <div className="flex flex-col gap-3 pt-4" style={{ borderTop: '1px solid var(--adm-trace)' }}>
+          <CheckField
+            label="Published"
+            description="Show this notice on the public site."
+            checked={form.is_published}
+            onChange={v => set('is_published', v)}
+          />
+          <CheckField
+            label="Pinned"
+            description="Keep it at the top of the announcements list."
+            checked={form.is_pinned}
+            onChange={v => set('is_pinned', v)}
+          />
+          {form.scheduled_at && form.is_published && new Date(form.scheduled_at) > new Date() && (
+            <p className="flex items-center gap-2 text-xs" style={{ color: 'var(--adm-signal)' }}>
+              <CalendarClock size={13} />
+              Hidden until {formatDateTime(form.scheduled_at)}.
+            </p>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }

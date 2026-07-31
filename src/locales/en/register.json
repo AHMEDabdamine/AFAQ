@@ -22,7 +22,20 @@
       "required": "This field is required",
       "email": "Please enter a valid email address",
       "requiredPolicies": "You must agree to the policies to register"
-    }
+    },
+    "changeEvent": "Choose a different event",
+    "registeringFor": "Registering for",
+    "seatsLeft": "{{left}} of {{total}} seats left",
+    "seatsUnlimited": "No seat limit",
+    "eventFull": "This event is full. Pick another one, or contact us to join the waiting list.",
+    "eventClosed": "Registration for this event has closed.",
+    "eventNotFound": "That event link is no longer valid. Choose an event below.",
+    "noOpenEvents": "No events are open for registration right now. Check the events page for what is coming up.",
+    "duplicate": "You have already registered for this event with that email address.",
+    "successTitle": "You are on the list",
+    "successBody": "We have your registration for {{event}}. Once a club admin approves it, your entry pass arrives at {{email}}.",
+    "registerAnother": "Register for another event",
+    "networkError": "We could not reach the server. Check your connection and try again."
   },
   "departments": {
     "fsas": "Faculty of Sciences and Applied Sciences",

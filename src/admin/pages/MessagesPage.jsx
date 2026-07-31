@@ -1,104 +1,277 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Mail, Trash2, Eye, EyeOff } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CheckCheck, Mail, MailOpen, Reply, Trash2 } from 'lucide-react'
+import { read, run, supabase } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import useCounts from '../hooks/useCounts'
+import useQueryParam from '../hooks/useQueryParam'
+import { formatDateTime, relativeTime } from '../lib/format'
+import PageHeader, { FilterTabs } from '../components/ui/PageHeader'
 import DataTable from '../components/ui/DataTable'
-import Modal from '../components/ui/Modal'
+import Drawer, { DetailRow } from '../components/ui/Drawer'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Skeleton from '../components/ui/Skeleton'
-import EmptyState from '../components/ui/EmptyState'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Panel from '../components/ui/Panel'
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'unread', label: 'Unread' },
+  { value: 'read', label: 'Read' },
+]
 
 export default function MessagesPage() {
-  const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
-  const [deleteId, setDeleteId] = useState(null)
   const addToast = useAdminStore(s => s.addToast)
+  const { refresh: refreshCounts } = useCounts()
 
-  useEffect(() => { loadMessages() }, [])
+  const [rows, setRows] = useState([])
+  const [state, setState] = useState({ loading: true, error: null })
+  const [status, setStatus] = useQueryParam('status', 'all')
+  const [search] = useQueryParam('q')
+  const [reading, setReading] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
 
-  const loadMessages = async () => {
-    const { data } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false })
-    setMessages(data || [])
-    setLoading(false)
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const { ok, data, message } = await read(
+      supabase.from('contact_messages').select('*').order('created_at', { ascending: false })
+    )
+    if (!ok) { setState({ loading: false, error: message }); return }
+    setRows(data || [])
+    setState({ loading: false, error: null })
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const unread = rows.filter(r => !r.is_read)
+
+  const filtered = useMemo(() => {
+    if (status === 'unread') return rows.filter(r => !r.is_read)
+    if (status === 'read') return rows.filter(r => r.is_read)
+    return rows
+  }, [rows, status])
+
+  const filterOptions = FILTERS.map(f => ({
+    ...f,
+    count: f.value === 'all' ? rows.length : f.value === 'unread' ? unread.length : rows.length - unread.length,
+  }))
+
+  const setRead = async (message, isRead, { silent = false } = {}) => {
+    const { ok } = await run(
+      supabase.from('contact_messages').update({ is_read: isRead }).eq('id', message.id),
+      silent ? {} : { success: isRead ? 'Marked as read.' : 'Marked as unread.', failure: 'That did not change.' }
+    )
+    if (ok) {
+      setRows(list => list.map(m => (m.id === message.id ? { ...m, is_read: isRead } : m)))
+      refreshCounts()
+    }
   }
 
-  const toggleRead = async (msg) => {
-    await supabase.from('contact_messages').update({ is_read: !msg.is_read }).eq('id', msg.id)
-    loadMessages()
+  /** Opening a message is reading it — no separate step. */
+  const open = message => {
+    setReading(message)
+    if (!message.is_read) setRead(message, true, { silent: true })
   }
 
-  const handleDelete = async () => {
-    await supabase.from('contact_messages').delete().eq('id', deleteId)
-    addToast('Message deleted')
-    setDeleteId(null)
-    loadMessages()
+  const markAllRead = async () => {
+    const ids = unread.map(m => m.id)
+    if (!ids.length) return
+    const { ok } = await run(
+      supabase.from('contact_messages').update({ is_read: true }).in('id', ids),
+      { success: `${ids.length} ${ids.length === 1 ? 'message' : 'messages'} marked as read.`, failure: 'Not all messages changed.' }
+    )
+    if (ok) { load(); refreshCounts() }
   }
 
-  const columns = [
-    { header: 'Name', accessorKey: 'name', cell: ({ row }) => (
-      <span className="font-medium" style={!row.original.is_read ? { color: 'var(--color-text)' } : { color: 'var(--color-text-muted)' }}>{row.original.name}</span>
-    )},
-    { header: 'Email', accessorKey: 'email' },
-    { header: 'Subject', accessorKey: 'subject' },
-    { header: 'Date', accessorKey: 'created_at', cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString() },
-    { header: 'Status', accessorKey: 'is_read', cell: ({ row }) => (
-      row.original.is_read
-        ? <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#6b728020', color: '#6b7280' }}>Read</span>
-        : <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#2460e720', color: '#2460e7' }}>New</span>
-    )},
-    { header: '', id: 'actions', cell: ({ row }) => (
-      <div className="flex gap-1">
-        <button onClick={() => setSelected(row.original)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}><Eye size={14} /></button>
-        <button onClick={() => toggleRead(row.original)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}>{row.original.is_read ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-        <button onClick={() => setDeleteId(row.original.id)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: '#dc2626' }}><Trash2 size={14} /></button>
-      </div>
-    )},
-  ]
+  const remove = async () => {
+    const targets = Array.isArray(pendingDelete) ? pendingDelete : [pendingDelete]
+    const ids = targets.map(m => m.id)
+    const { ok } = await run(
+      supabase.from('contact_messages').delete().in('id', ids),
+      {
+        success: ids.length === 1 ? 'Message deleted.' : `${ids.length} messages deleted.`,
+        failure: 'The messages were not deleted.',
+      }
+    )
+    if (ok) {
+      setPendingDelete(null)
+      setReading(null)
+      load()
+      refreshCounts()
+    }
+  }
 
-  if (loading) return <div className="space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} style={{ height: 48 }} />)}</div>
+  const columns = useMemo(() => [
+    {
+      header: 'From',
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <span className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="rounded-full shrink-0"
+            style={{ width: 7, height: 7, background: row.original.is_read ? 'transparent' : 'var(--adm-signal)' }}
+            aria-label={row.original.is_read ? undefined : 'Unread'}
+          />
+          <span className="min-w-0">
+            <span
+              className="block text-sm adm-truncate"
+              style={{ maxWidth: 180, fontWeight: row.original.is_read ? 500 : 700 }}
+            >
+              {row.original.name}
+            </span>
+            <span className="adm-data block text-[11px] adm-truncate" style={{ color: 'var(--adm-silk-faint)', maxWidth: 180 }}>
+              {row.original.email}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      header: 'Subject',
+      accessorKey: 'subject',
+      cell: ({ row }) => (
+        <span className="min-w-0 block">
+          <span
+            className="block text-sm adm-truncate"
+            style={{ maxWidth: 320, fontWeight: row.original.is_read ? 400 : 650 }}
+          >
+            {row.original.subject}
+          </span>
+          <span className="block text-xs adm-truncate" style={{ color: 'var(--adm-silk-faint)', maxWidth: 320 }}>
+            {row.original.message}
+          </span>
+        </span>
+      ),
+    },
+    {
+      header: 'Received',
+      accessorKey: 'created_at',
+      cell: ({ row }) => (
+        <span className="adm-data text-[12px]" title={formatDateTime(row.original.created_at)}>
+          {relativeTime(row.original.created_at)}
+        </span>
+      ),
+    },
+    {
+      header: '',
+      id: 'actions',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-0.5" onClick={e => e.stopPropagation()}>
+          <IconButton
+            icon={row.original.is_read ? Mail : MailOpen}
+            label={row.original.is_read ? 'Mark as unread' : 'Mark as read'}
+            onClick={() => setRead(row.original, !row.original.is_read)}
+          />
+          <IconButton icon={Trash2} label="Delete" danger onClick={() => setPendingDelete(row.original)} />
+        </div>
+      ),
+    },
+  ], []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>Contact form messages</p>
+    <div>
+      <PageHeader
+        eyebrow="Operate"
+        title="Messages"
+        description="Everything sent through the contact form. Opening a message marks it read."
+        actions={
+          <Button icon={CheckCheck} onClick={markAllRead} disabled={!unread.length}>
+            Mark all read{unread.length ? ` (${unread.length})` : ''}
+          </Button>
+        }
+      />
 
-      {messages.length === 0 ? (
-        <EmptyState icon={Mail} title="No messages yet" description="Messages from the contact form will appear here" />
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
       ) : (
-        <DataTable columns={columns} data={messages} searchPlaceholder="Search messages..." />
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={state.loading}
+          initialSearch={search}
+          getRowId={row => String(row.id)}
+          onRowClick={open}
+          enableSelection
+          searchPlaceholder="Search sender, subject, message…"
+          initialSort={[{ id: 'created_at', desc: true }]}
+          toolbar={<FilterTabs options={filterOptions} value={status} onChange={setStatus} label="Message filter" />}
+          bulkActions={selected => (
+            <Button size="sm" variant="danger" icon={Trash2} onClick={() => setPendingDelete(selected)}>
+              Delete {selected.length}
+            </Button>
+          )}
+          emptyState={
+            rows.length === 0 ? (
+              <EmptyState
+                icon={Mail}
+                title="No messages yet"
+                description="When someone writes in through the contact form on the website, it arrives here."
+              />
+            ) : (
+              <EmptyState compact icon={Mail} title="Nothing in this view" description="Try another filter." />
+            )
+          }
+        />
       )}
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} title="Message Details" size="md">
-        {selected && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>Name</p>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{selected.name}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>Email</p>
-                <p className="text-sm" style={{ color: 'var(--color-text)' }}>{selected.email}</p>
-              </div>
+      <Drawer
+        open={!!reading}
+        onClose={() => setReading(null)}
+        title={reading?.subject || ''}
+        subtitle={reading ? `${reading.name} · ${formatDateTime(reading.created_at)}` : ''}
+        width={560}
+        footer={
+          reading && (
+            <>
+              <Button
+                icon={Trash2}
+                onClick={() => setPendingDelete(reading)}
+                style={{ color: 'var(--adm-fault)' }}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="primary"
+                icon={Reply}
+                onClick={() => {
+                  // Replying happens in the admin's own mail client — the club
+                  // has no outbound inbox to thread against.
+                  window.location.href = `mailto:${reading.email}?subject=${encodeURIComponent(`Re: ${reading.subject}`)}`
+                }}
+              >
+                Reply by email
+              </Button>
+            </>
+          )
+        }
+      >
+        {reading && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <DetailRow label="Name">{reading.name}</DetailRow>
+              <DetailRow label="Email" mono>{reading.email}</DetailRow>
             </div>
-            <div>
-              <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Subject</p>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selected.subject}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Message</p>
-              <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{selected.message}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>Date</p>
-              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{new Date(selected.created_at).toLocaleString()}</p>
-            </div>
+            <DetailRow label="Message">
+              <p className="whitespace-pre-wrap leading-relaxed">{reading.message}</p>
+            </DetailRow>
           </div>
         )}
-      </Modal>
+      </Drawer>
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Message" message="Are you sure?" />
-    </motion.div>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title={Array.isArray(pendingDelete) ? 'Delete these messages?' : 'Delete this message?'}
+        confirmLabel={Array.isArray(pendingDelete) ? `Delete ${pendingDelete.length}` : 'Delete message'}
+        message={
+          Array.isArray(pendingDelete)
+            ? `${pendingDelete.length} messages will be removed. This cannot be undone.`
+            : pendingDelete
+              ? `The message from ${pendingDelete.name} will be removed. This cannot be undone.`
+              : ''
+        }
+      />
+    </div>
   )
 }

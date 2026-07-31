@@ -1250,73 +1250,8 @@ select.form-input {
   50% { opacity: 0; }
 }
 
-/* Admin sidebar nav item hover */
-.admin-nav-link:hover {
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent) !important;
-}
-
-/* Admin border/secondary button hover */
-.admin-btn {
-  cursor: pointer;
-  font-size: 0.875rem;
-  padding: 0.625rem 1rem;
-}
-.admin-btn:hover {
-  background: color-mix(in srgb, var(--color-accent) 8%, transparent) !important;
-  border-color: var(--color-accent) !important;
-  color: var(--color-accent) !important;
-}
-
-/* Admin icon/ghost button hover */
-.admin-icon-btn {
-  cursor: pointer;
-}
-.admin-icon-btn:hover {
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent) !important;
-  color: var(--color-accent) !important;
-}
-
-/* Admin primary/accent button */
-.admin-btn-primary {
-  cursor: pointer;
-  font-size: 0.875rem;
-  padding: 0.625rem 1.125rem;
-  transition: all 0.2s ease;
-}
-.admin-btn-primary:hover {
-  filter: brightness(1.1);
-  transform: translateY(-2px);
-}
-.admin-btn-primary:active {
-  filter: brightness(0.95);
-  transform: translateY(0);
-}
-.admin-btn-primary:disabled {
-  filter: brightness(0.75);
-  transform: none;
-}
-
-/* Admin form inputs - bigger */
-.admin-input {
-  font-size: 0.9375rem !important;
-  padding: 0.625rem 0.875rem !important;
-}
-
-/* Admin labels - bigger */
-.admin-label {
-  font-size: 0.8125rem !important;
-}
-
-/* Admin page description text */
-.admin-desc {
-  font-size: 0.9375rem !important;
-}
-
-/* Admin badge text */
-.admin-badge {
-  font-size: 0.75rem !important;
-  padding: 0.25rem 0.625rem !important;
-}
+/* The admin console ships its own scoped stylesheet, src/admin/admin.css.
+   The .admin-* rules that used to live here are gone with it. */
 
 /* ══ AFAQ.BRD — activities board ═══════════════════════════════════════════
    The club drawn as a circuit board: silkscreen on paper, one accent, traces
@@ -1522,62 +1457,6 @@ select.form-input {
   background: var(--color-border);
 }
 
-/* ── Datasheet ── */
-
-.afaq-datasheet {
-  padding-top: 22px;
-}
-
-.afaq-datasheet-rule {
-  height: 1.5px;
-  margin-bottom: 22px;
-  background: repeating-linear-gradient(
-    to right,
-    var(--color-accent) 0 8px,
-    transparent 8px 15px
-  );
-  opacity: 0.4;
-}
-
-.afaq-datasheet-body {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  padding: 22px 24px;
-  border: 1.5px solid var(--color-border-light);
-  border-radius: 18px;
-  background: var(--color-card);
-}
-
-.afaq-datasheet-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.afaq-close {
-  flex-shrink: 0;
-  margin-inline-start: auto;
-  padding: 7px 16px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 100px;
-  background: transparent;
-  font-family: "Minecraft", system-ui, sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
-}
-
-.afaq-close:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
 /* ── Mobile bus ── */
 
 .afaq-bus {
@@ -1660,4 +1539,83 @@ select.form-input {
   font-weight: 700;
   font-style: normal;
   letter-spacing: 0.02em;
+}
+
+/* ── Public form fields ─────────────────────────────────────────────────────
+   Shared by the contact, join and event-registration forms. Focus and error
+   states live here rather than in inline handlers, so an invalid field keeps
+   its red border after you click away from it. */
+
+.pf-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.pf-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding-inline-start: 4px;
+  font-size: 12.5px;
+  color: #ef4444;
+}
+
+.pf-hint {
+  margin: 6px 0 0;
+  padding-inline-start: 4px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.pf-form-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.1);
+  font-size: 13.5px;
+  color: #ef4444;
+}
+
+/* Selected-event summary on the registration form */
+
+.pf-event-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 20px;
+  background: var(--color-accent-soft);
+}
+
+.pf-event-poster {
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-light);
+}
+
+.pf-event-seats {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 100px;
+  overflow: hidden;
+  background: var(--color-border-light);
+}
+
+.pf-event-seats > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
 }

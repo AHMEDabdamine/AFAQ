@@ -9,6 +9,8 @@ export default function ProtectedRoute() {
   const isLoading = useAdminStore(s => s.isLoading)
   const initialize = useAdminStore(s => s.initialize)
 
+  // The store guards against running twice, so a remount no longer refetches
+  // the profile on every navigation.
   useEffect(() => { initialize() }, [initialize])
 
   if (isLoading) return <LoadingScreen />

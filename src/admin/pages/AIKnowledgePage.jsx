@@ -1,263 +1,349 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Pencil, Trash2, Search, Filter } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Brain, Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { api } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import useQueryParam from '../hooks/useQueryParam'
+import { formatDate } from '../lib/format'
+import PageHeader, { FilterTabs } from '../components/ui/PageHeader'
+import DataTable from '../components/ui/DataTable'
+import Modal from '../components/ui/Modal'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Badge, { StatusBadge } from '../components/ui/Badge'
+import Panel from '../components/ui/Panel'
+import { CheckField, TextArea, TextField } from '../components/ui/Field'
+
+const BLANK = { title: '', category: '', content: '', keywords: '', published: true }
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'published', label: 'Published' },
+  { value: 'draft', label: 'Drafts' },
+]
 
 export default function AIKnowledgePage() {
   const addToast = useAdminStore(s => s.addToast)
+
   const [articles, setArticles] = useState([])
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [search, setSearch] = useState('')
-  const [filterCat, setFilterCat] = useState('')
+  const [state, setState] = useState({ loading: true, error: null })
+  const [status, setStatus] = useQueryParam('status', 'all')
+  const [category, setCategory] = useQueryParam('category', 'all')
+  const [search] = useQueryParam('q')
 
-  const [form, setForm] = useState({
-    title: '', category: '', content: '', keywords: '', published: true,
-  })
+  const [editor, setEditor] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [working, setWorking] = useState({})
 
-  async function fetchArticles() {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/ai-knowledge')
-      if (res.ok) setArticles(await res.json())
-      const catRes = await fetch('/api/ai-knowledge/categories')
-      if (catRes.ok) setCategories(await catRes.json())
-    } catch { } finally { setLoading(false) }
-  }
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const { ok, data, message } = await api('/api/ai-knowledge')
+    if (!ok) { setState({ loading: false, error: message }); return }
+    setArticles(Array.isArray(data) ? data : [])
+    setState({ loading: false, error: null })
+  }, [])
 
-  useEffect(() => { fetchArticles() }, [])
+  useEffect(() => { load() }, [load])
 
-  function resetForm() {
-    setForm({ title: '', category: '', content: '', keywords: '', published: true })
-    setEditing(null)
-    setShowForm(false)
-  }
+  const categories = useMemo(
+    () => [...new Set(articles.map(a => a.category).filter(Boolean))].sort(),
+    [articles]
+  )
 
-  function openEdit(article) {
-    setForm({
-      title: article.title,
-      category: article.category || '',
-      content: article.content,
-      keywords: (article.keywords || []).join(', '),
-      published: article.published,
+  const filtered = useMemo(
+    () => articles.filter(a =>
+      (status === 'all' || (status === 'published' ? a.published : !a.published)) &&
+      (category === 'all' || a.category === category)
+    ),
+    [articles, status, category]
+  )
+
+  const filterOptions = FILTERS.map(f => ({
+    ...f,
+    count: f.value === 'all' ? articles.length
+      : articles.filter(a => (f.value === 'published' ? a.published : !a.published)).length,
+  }))
+
+  const togglePublish = async article => {
+    setWorking(w => ({ ...w, [article.id]: true }))
+    const next = !article.published
+    const { ok, message } = await api(`/api/ai-knowledge/${article.id}/publish`, {
+      method: 'PATCH',
+      body: { published: next },
     })
-    setEditing(article.id)
-    setShowForm(true)
+    setWorking(w => ({ ...w, [article.id]: false }))
+
+    if (!ok) { addToast(message, 'error'); return }
+    addToast(next ? 'The assistant can use this article now.' : 'The assistant will no longer use this article.')
+    setArticles(list => list.map(a => (a.id === article.id ? { ...a, published: next } : a)))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    try {
-      const body = {
-        ...form,
-        keywords: form.keywords.split(',').map(k => k.trim()).filter(Boolean),
-      }
-      const method = editing ? 'PUT' : 'POST'
-      const url = editing ? `/api/ai-knowledge/${editing}` : '/api/ai-knowledge'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) {
-        addToast(editing ? 'Article updated' : 'Article created')
-        resetForm()
-        fetchArticles()
-      } else {
-        const err = await res.json()
-        addToast(err.error || 'Failed to save', 'error')
-      }
-    } catch { addToast('Network error', 'error') }
+  const remove = async () => {
+    const { ok, message } = await api(`/api/ai-knowledge/${pendingDelete.id}`, { method: 'DELETE' })
+    if (!ok) { addToast(message, 'error'); return }
+    addToast('Article deleted.')
+    setPendingDelete(null)
+    load()
   }
 
-  async function handleDelete(id) {
-    if (!confirm('Delete this article?')) return
-    try {
-      const res = await fetch(`/api/ai-knowledge/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        addToast('Article deleted')
-        fetchArticles()
-      } else addToast('Failed to delete', 'error')
-    } catch { addToast('Network error', 'error') }
-  }
-
-  async function togglePublish(article) {
-    try {
-      const res = await fetch(`/api/ai-knowledge/${article.id}/publish`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ published: !article.published }),
-      })
-      if (res.ok) {
-        addToast(article.published ? 'Unpublished' : 'Published')
-        fetchArticles()
-      } else addToast('Failed to toggle', 'error')
-    } catch { addToast('Network error', 'error') }
-  }
-
-  const filtered = articles.filter(a => {
-    if (search && !a.title.toLowerCase().includes(search.toLowerCase()) && !a.content.toLowerCase().includes(search.toLowerCase())) return false
-    if (filterCat && a.category !== filterCat) return false
-    return true
-  })
+  const columns = useMemo(() => [
+    {
+      header: 'Article',
+      accessorKey: 'title',
+      cell: ({ row }) => (
+        <span className="min-w-0 block">
+          <span className="block text-sm font-semibold adm-truncate" style={{ maxWidth: 300 }}>{row.original.title}</span>
+          <span className="block text-xs adm-truncate" style={{ color: 'var(--adm-silk-faint)', maxWidth: 300 }}>
+            {row.original.content}
+          </span>
+        </span>
+      ),
+    },
+    {
+      header: 'Category',
+      accessorKey: 'category',
+      cell: ({ row }) => row.original.category
+        ? <Badge>{row.original.category}</Badge>
+        : <span style={{ color: 'var(--adm-silk-faint)' }}>—</span>,
+    },
+    {
+      header: 'Keywords',
+      accessorKey: 'keywords',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const words = row.original.keywords || []
+        if (!words.length) return <span style={{ color: 'var(--adm-silk-faint)' }}>—</span>
+        return (
+          <span className="adm-data text-[11px] adm-truncate block" style={{ maxWidth: 180, color: 'var(--adm-silk-dim)' }}>
+            {words.join(', ')}
+          </span>
+        )
+      },
+    },
+    {
+      header: 'In use',
+      accessorKey: 'published',
+      cell: ({ row }) => <StatusBadge status={row.original.published ? 'published' : 'draft'} />,
+    },
+    {
+      header: 'Updated',
+      accessorKey: 'updated_at',
+      cell: ({ row }) => (
+        <span className="adm-data text-[12px]">{formatDate(row.original.updated_at || row.original.created_at)}</span>
+      ),
+    },
+    {
+      header: '',
+      id: 'actions',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const a = row.original
+        return (
+          <div className="flex items-center justify-end gap-0.5" onClick={e => e.stopPropagation()}>
+            {working[a.id] && <Loader2 size={14} className="adm-spin mr-1" style={{ color: 'var(--adm-silk-faint)' }} />}
+            <IconButton
+              icon={a.published ? EyeOff : Eye}
+              label={a.published ? 'Stop using this article' : 'Let the assistant use this article'}
+              disabled={working[a.id]}
+              onClick={() => togglePublish(a)}
+            />
+            <IconButton icon={Pencil} label="Edit" onClick={() => setEditor({ article: a })} />
+            <IconButton icon={Trash2} label="Delete" danger onClick={() => setPendingDelete(a)} />
+          </div>
+        )
+      },
+    },
+  ], [working]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>AI Knowledge</h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Articles the AI assistant uses to answer questions</p>
-        </div>
-        <button
-          onClick={() => { resetForm(); setShowForm(true) }}
-          className="admin-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-white"
-          style={{ background: 'var(--color-accent)' }}
-        >
-          <Plus size={16} /> New Article
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        eyebrow="Console"
+        title="AI knowledge"
+        description="What the website assistant knows. It answers visitors using the published articles here and nothing else."
+        actions={<Button variant="primary" icon={Plus} onClick={() => setEditor({ article: null })}>New article</Button>}
+      />
 
-      {showForm && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border p-5 mb-6"
-          style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}
-        >
-          <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>
-            {editing ? 'Edit Article' : 'New Article'}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Title *</label>
-                <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl text-sm border"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} required />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Category</label>
-                <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                  placeholder="e.g. membership, about"
-                  className="w-full px-3 py-2 rounded-xl text-sm border"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Content * (Markdown supported)</label>
-              <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
-                rows={10}
-                className="w-full px-3 py-2 rounded-xl text-sm border resize-y font-mono"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Keywords (comma-separated)</label>
-                <input value={form.keywords} onChange={e => setForm({ ...form, keywords: e.target.value })}
-                  placeholder="membership, join, register"
-                  className="w-full px-3 py-2 rounded-xl text-sm border"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-              <div className="flex items-end gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.published}
-                    onChange={e => setForm({ ...form, published: e.target.checked })}
-                    className="rounded" />
-                  <span className="text-sm" style={{ color: 'var(--color-text)' }}>Published</span>
-                </label>
-              </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button type="submit"
-                className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white"
-                style={{ background: 'var(--color-accent)' }}>
-                {editing ? 'Update' : 'Create'}
-              </button>
-              <button type="button" onClick={resetForm}
-                className="admin-btn px-4 py-2 rounded-xl text-sm font-medium"
-                style={{ color: 'var(--color-text-muted)' }}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search articles..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl text-sm border"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-        </div>
-        <div className="relative">
-          <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
-          <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-            className="pl-9 pr-8 py-2 rounded-xl text-sm border appearance-none cursor-pointer"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {filtered.length} / {articles.length}
-        </span>
-      </div>
-
-      {loading ? (
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border p-8 text-center" style={{ borderColor: 'var(--color-border-light)' }}>
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No articles found</p>
-        </div>
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(article => (
-            <div key={article.id}
-              className="rounded-2xl border p-4 flex items-start justify-between gap-4"
-              style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  {article.category && (
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-border-light)', color: 'var(--color-text-muted)' }}>
-                      {article.category}
-                    </span>
-                  )}
-                  <button onClick={() => togglePublish(article)}
-                    className={`text-xs px-2 py-0.5 rounded cursor-pointer transition-all hover:brightness-110 ${article.published ? 'text-green-700 bg-green-100' : 'text-orange-700 bg-orange-100'}`}>
-                    {article.published ? 'Published' : 'Draft'}
-                  </button>
-                </div>
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{article.title}</p>
-                <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--color-text-muted)' }}>{article.content}</p>
-                {article.keywords && article.keywords.length > 0 && (
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {article.keywords.map((kw, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded"
-                        style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}>{kw}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-1 shrink-0">
-                <button onClick={() => openEdit(article)}
-                  className="admin-icon-btn p-2 rounded-xl"
-                  style={{ color: 'var(--color-text-muted)' }}>
-                  <Pencil size={16} />
-                </button>
-                <button onClick={() => handleDelete(article.id)}
-                  className="admin-icon-btn p-2 rounded-xl"
-                  style={{ color: '#dc2626' }}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={state.loading}
+          initialSearch={search}
+          getRowId={row => String(row.id)}
+          onRowClick={article => setEditor({ article })}
+          searchPlaceholder="Search articles…"
+          toolbar={
+            <>
+              <FilterTabs options={filterOptions} value={status} onChange={setStatus} label="Article filter" />
+              {categories.length > 0 && (
+                <select
+                  className="adm-input"
+                  style={{ width: 'auto', minWidth: 160 }}
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                  aria-label="Filter by category"
+                >
+                  <option value="all">Every category</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+            </>
+          }
+          emptyState={
+            articles.length === 0 ? (
+              <EmptyState
+                icon={Brain}
+                title="The assistant knows nothing yet"
+                description="Write an article for each question visitors ask — joining the club, meeting times, what you build."
+                action={<Button variant="primary" icon={Plus} onClick={() => setEditor({ article: null })}>New article</Button>}
+              />
+            ) : (
+              <EmptyState compact icon={Brain} title="Nothing in this view" description="Try another filter." />
+            )
+          }
+        />
       )}
-    </motion.div>
+
+      <ArticleEditor
+        key={editor?.article?.id || 'new'}
+        open={!!editor}
+        article={editor?.article}
+        categories={categories}
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); load() }}
+        addToast={addToast}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title="Delete this article?"
+        message={pendingDelete ? `The assistant will stop answering from “${pendingDelete.title}”. This cannot be undone.` : ''}
+        confirmLabel="Delete article"
+      />
+    </div>
+  )
+}
+
+function ArticleEditor({ open, article, categories, onClose, onSaved, addToast }) {
+  const [form, setForm] = useState(BLANK)
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setForm(article
+      ? {
+        title: article.title || '',
+        category: article.category || '',
+        content: article.content || '',
+        keywords: (article.keywords || []).join(', '),
+        published: article.published !== false,
+      }
+      : BLANK)
+    setErrors({})
+  }, [open, article])
+
+  const set = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  const save = async () => {
+    const next = {}
+    if (!form.title.trim()) next.title = 'Give the article a title.'
+    if (!form.content.trim()) next.content = 'Write the answer the assistant should give.'
+    if (Object.keys(next).length) { setErrors(next); return }
+
+    setSaving(true)
+    const { ok, message } = await api(
+      article ? `/api/ai-knowledge/${article.id}` : '/api/ai-knowledge',
+      {
+        method: article ? 'PUT' : 'POST',
+        body: {
+          title: form.title.trim(),
+          category: form.category.trim() || null,
+          content: form.content.trim(),
+          keywords: form.keywords.split(',').map(k => k.trim()).filter(Boolean),
+          published: form.published,
+        },
+      }
+    )
+    setSaving(false)
+
+    if (!ok) { addToast(message, 'error'); return }
+    addToast(article ? 'Article updated.' : 'Article added to the assistant.')
+    onSaved()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      title={article ? 'Edit article' : 'New article'}
+      description="Write it as an answer, not a note to yourself — the assistant repeats this to visitors."
+      footer={
+        <>
+          <Button onClick={onClose} data-dialog-dismiss="true">Cancel</Button>
+          <Button variant="primary" onClick={save} busy={saving} busyLabel="Saving…">
+            {article ? 'Save changes' : 'Add article'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <TextField
+          label="Title" required
+          value={form.title} error={errors.title}
+          onChange={e => set('title', e.target.value)}
+          placeholder="How to join the club"
+        />
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="adm-label" htmlFor="ai-category">Category</label>
+            <input
+              id="ai-category"
+              className="adm-input"
+              list="ai-categories"
+              value={form.category}
+              onChange={e => set('category', e.target.value)}
+              placeholder="Membership"
+            />
+            <datalist id="ai-categories">
+              {categories.map(c => <option key={c} value={c} />)}
+            </datalist>
+          </div>
+          <TextField
+            label="Keywords"
+            hint="Comma separated. Words a visitor might use."
+            value={form.keywords}
+            onChange={e => set('keywords', e.target.value)}
+            placeholder="join, membership, sign up"
+          />
+        </div>
+
+        <TextArea
+          label="Answer" required rows={9}
+          value={form.content} error={errors.content}
+          onChange={e => set('content', e.target.value)}
+          placeholder="Anyone enrolled at the University of Bouira can join. Fill in the form on the Join page and…"
+        />
+
+        <div className="pt-4" style={{ borderTop: '1px solid var(--adm-trace)' }}>
+          <CheckField
+            label="In use"
+            description="Let the assistant answer visitors from this article."
+            checked={form.published}
+            onChange={v => set('published', v)}
+          />
+        </div>
+      </div>
+    </Modal>
   )
 }

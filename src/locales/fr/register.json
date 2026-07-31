@@ -22,7 +22,20 @@
       "required": "Ce champ est requis",
       "email": "Veuillez entrer une adresse email valide",
       "requiredPolicies": "Vous devez accepter les politiques pour vous inscrire"
-    }
+    },
+    "changeEvent": "Choisir un autre evenement",
+    "registeringFor": "Inscription à",
+    "seatsLeft": "{{left}} places restantes sur {{total}}",
+    "seatsUnlimited": "Aucune limite de places",
+    "eventFull": "Cet evenement est complet. Choisissez-en un autre, ou contactez-nous pour la liste d'attente.",
+    "eventClosed": "Les inscriptions à cet evenement sont fermees.",
+    "eventNotFound": "Ce lien d'evenement n'est plus valide. Choisissez un evenement ci-dessous.",
+    "noOpenEvents": "Aucun evenement n'est ouvert aux inscriptions pour le moment. Consultez la page des evenements.",
+    "duplicate": "Vous êtes dejà inscrit à cet evenement avec cette adresse email.",
+    "successTitle": "Votre inscription est enregistree",
+    "successBody": "Nous avons votre inscription à {{event}}. Dès qu'un administrateur la valide, votre pass arrive à {{email}}.",
+    "registerAnother": "S’inscrire à un autre evenement",
+    "networkError": "Impossible de joindre le serveur. Verifiez votre connexion et reessayez."
   },
   "departments": {
     "fsas": "Faculte des Sciences et Sciences Appliquees",

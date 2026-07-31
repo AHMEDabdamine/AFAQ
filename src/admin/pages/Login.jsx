@@ -1,31 +1,37 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, EyeOff, LogIn, Mail, ArrowLeft, Check } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Mail } from 'lucide-react'
 import useAdminStore from '../store/adminStore'
 import { supabase } from '../../lib/supabase'
+import Modal from '../components/ui/Modal'
+import Button from '../components/ui/Button'
+import { TextField } from '../components/ui/Field'
+import '../admin.css'
 
 export default function Login() {
+  const login = useAdminStore(s => s.login)
+  const theme = useAdminStore(s => s.theme)
+  const authError = useAdminStore(s => s.authError)
+  const navigate = useNavigate()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [showReset, setShowReset] = useState(false)
-  const [resetEmail, setResetEmail] = useState('')
-  const [resetSent, setResetSent] = useState(false)
-  const [resetLoading, setResetLoading] = useState(false)
-  const [resetError, setResetError] = useState('')
-  const login = useAdminStore(s => s.login)
-  const navigate = useNavigate()
+  const [resetOpen, setResetOpen] = useState(false)
 
-  const handleSubmit = async (e) => {
+  // A suspended admin gets told why, instead of a silent bounce to this screen.
+  useEffect(() => { if (authError) setError(authError) }, [authError])
+
+  const submit = async e => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
-      navigate('/admin')
+      await login(email.trim(), password)
+      navigate('/admin', { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -33,202 +39,204 @@ export default function Login() {
     }
   }
 
-  const handleResetPassword = async (e) => {
-    e.preventDefault()
-    setResetError('')
-    setResetLoading(true)
-    try {
-      const check = await fetch('/api/admin/check-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail }),
-      })
-      const { exists } = await check.json()
-      if (!exists) {
-        throw new Error('No admin account found with this email.')
-      }
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: import.meta.env.VITE_APP_URL,
-      })
-      if (error) throw error
-      setResetSent(true)
-    } catch (err) {
-      setResetError(err.message || 'Failed to send reset email.')
-    } finally {
-      setResetLoading(false)
-    }
-  }
-
   return (
-    <div dir="ltr" className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--color-bg)' }}>
+    <div
+      dir="ltr"
+      data-theme={theme}
+      className="adm adm-chassis min-h-screen flex flex-col items-center justify-center p-5"
+    >
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm rounded-2xl p-8 border shadow-sm"
-        style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+        className="w-full"
+        style={{ maxWidth: 380 }}
       >
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: `${'var(--color-accent)'}12` }}>
-            <LogIn size={22} style={{ color: 'var(--color-accent)' }} />
-          </div>
-          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Admin Login</h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>AFAQ Scientific Club</p>
+        <div className="text-center mb-7">
+          <span
+            className="adm-pixel inline-flex items-center justify-center mb-4"
+            style={{
+              width: 46, height: 46, borderRadius: 12, fontSize: 18,
+              background: 'var(--adm-signal)', color: 'var(--adm-signal-ink)',
+            }}
+            aria-hidden="true"
+          >
+            A
+          </span>
+          <h1 className="adm-pixel text-[17px] tracking-widest mb-1.5" style={{ color: 'var(--adm-silk)' }}>
+            AFAQ CONSOLE
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--adm-silk-faint)' }}>
+            Sign in to manage the scientific club.
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={submit}
+          className="adm-panel p-6 space-y-4"
+          style={{ boxShadow: 'var(--adm-shadow-lift)' }}
+        >
           {error && (
-            <div className="p-3 rounded-xl text-sm" style={{ background: '#fef2f2', color: '#dc2626' }}>
+            <p
+              role="alert"
+              className="flex items-start gap-2 p-3 rounded-lg text-[13px]"
+              style={{ background: 'var(--adm-fault-wash)', color: 'var(--adm-fault)' }}
+            >
+              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
               {error}
-            </div>
+            </p>
           )}
+
+          <TextField
+            label="Email" type="email" required autoComplete="email"
+            value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="admin@afaq.dz"
+          />
+
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-              placeholder="admin@afaq.dz"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Password</label>
+            <label className="adm-label" htmlFor="login-password">Password</label>
             <div className="relative">
               <input
+                id="login-password"
                 type={showPassword ? 'text' : 'password'}
+                className="adm-input"
+                style={{ paddingRight: 40 }}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm pr-10"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-                placeholder="••••••••"
+                autoComplete="current-password"
                 required
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="admin-icon-btn absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md"
-                style={{ color: 'var(--color-text-muted)' }}
+                onClick={() => setShowPassword(s => !s)}
+                className="adm-icon-btn absolute right-1 top-1/2 -translate-y-1/2"
+                style={{ width: 30, height: 30 }}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </div>
-          <div className="text-right">
-            <button
-              type="button"
-              onClick={() => { setShowReset(true); setResetEmail(email); setResetSent(false); setResetError('') }}
-              className="text-xs hover:underline"
-              style={{ color: 'var(--color-accent)' }}
-            >
-              Forgot password?
-            </button>
-          </div>
+
+          <Button type="submit" variant="primary" busy={loading} busyLabel="Signing in…" className="w-full">
+            Sign in
+          </Button>
 
           <button
-            type="submit"
-            disabled={loading}
-            className="admin-btn-primary w-full py-2.5 rounded-xl text-sm font-semibold text-white"
-            style={{ background: 'var(--color-accent)' }}
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="w-full text-[13px] font-medium"
+            style={{ color: 'var(--adm-signal)' }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            I forgot my password
           </button>
         </form>
 
-        <AnimatePresence>
-          {showReset && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{
-                position: 'fixed', inset: 0, zIndex: 9999,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(0,0,0,0.5)',
-              }}
-              onClick={(e) => { if (e.target === e.currentTarget) setShowReset(false) }}
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm rounded-2xl p-8 border shadow-sm"
-                style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)', margin: 16 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {resetSent ? (
-                  <div className="text-center">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4" style={{ background: 'rgba(22,163,74,0.1)' }}>
-                      <Check size={22} style={{ color: '#16A34A' }} />
-                    </div>
-                    <h2 className="text-lg font-bold mb-2" style={{ color: 'var(--color-text)' }}>Check your email</h2>
-                    <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
-                      We sent a password reset link to <strong>{resetEmail}</strong>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowReset(false)}
-                      className="text-sm font-semibold hover:underline"
-                      style={{ color: 'var(--color-accent)' }}
-                    >
-                      Back to login
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setShowReset(false)}
-                      className="flex items-center gap-1 text-xs mb-4 hover:underline"
-                      style={{ color: 'var(--color-text-muted)' }}
-                    >
-                      <ArrowLeft size={14} /> Back
-                    </button>
-                    <div className="text-center mb-6">
-                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4" style={{ background: `${'var(--color-accent)'}12` }}>
-                        <Mail size={22} style={{ color: 'var(--color-accent)' }} />
-                      </div>
-                      <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--color-text)' }}>Reset Password</h2>
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        Enter your email and we'll send you a recovery link.
-                      </p>
-                    </div>
-                    <form onSubmit={handleResetPassword} className="space-y-4">
-                      {resetError && (
-                        <div className="p-3 rounded-xl text-sm" style={{ background: '#fef2f2', color: '#dc2626' }}>
-                          {resetError}
-                        </div>
-                      )}
-                      <input
-                        type="email"
-                        value={resetEmail}
-                        onChange={e => setResetEmail(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-                        placeholder="admin@afaq.dz"
-                        required
-                      />
-                      <button
-                        type="submit"
-                        disabled={resetLoading}
-                        className="admin-btn-primary w-full py-2.5 rounded-xl text-sm font-semibold text-white"
-                        style={{ background: 'var(--color-accent)' }}
-                      >
-                        {resetLoading ? 'Sending...' : 'Send Reset Link'}
-                      </button>
-                    </form>
-                  </>
-                )}
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <p className="text-xs text-center mt-6" style={{ color: 'var(--color-text-muted)' }}>
-          <a href="/" style={{ color: 'var(--color-accent)' }}>← Back to website</a>
+        <p className="text-center mt-5">
+          <a href="/" className="text-[13px]" style={{ color: 'var(--adm-silk-faint)' }}>
+            ← Back to the website
+          </a>
         </p>
       </motion.div>
+
+      <ResetPasswordDialog
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        initialEmail={email}
+      />
     </div>
+  )
+}
+
+function ResetPasswordDialog({ open, onClose, initialEmail }) {
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (open) { setEmail(initialEmail || ''); setSent(false); setError('') }
+  }, [open, initialEmail])
+
+  const send = async e => {
+    e.preventDefault()
+    setError('')
+    setSending(true)
+    try {
+      const res = await fetch('/api/admin/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      const { exists } = await res.json()
+      if (!exists) throw new Error('No admin account uses that email address.')
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: import.meta.env.VITE_APP_URL,
+      })
+      if (resetError) throw resetError
+      setSent(true)
+    } catch (err) {
+      setError(err.message || 'The reset email could not be sent. Try again in a moment.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="sm"
+      title={sent ? 'Check your email' : 'Reset your password'}
+      description={sent ? undefined : 'We will send a link that lets you set a new password.'}
+      footer={
+        sent ? (
+          <Button variant="primary" onClick={onClose}>Back to sign in</Button>
+        ) : (
+          <>
+            <Button icon={ArrowLeft} onClick={onClose} data-dialog-dismiss="true">Back</Button>
+            <Button variant="primary" onClick={send} busy={sending} busyLabel="Sending…">Send the link</Button>
+          </>
+        )
+      }
+    >
+      {sent ? (
+        <div className="flex items-start gap-3">
+          <span
+            className="flex items-center justify-center rounded-lg shrink-0"
+            style={{ width: 34, height: 34, background: 'var(--adm-ok-wash)', color: 'var(--adm-ok)' }}
+            aria-hidden="true"
+          >
+            <Check size={17} />
+          </span>
+          <p className="text-sm" style={{ color: 'var(--adm-silk-dim)' }}>
+            A reset link is on its way to <strong style={{ color: 'var(--adm-silk)' }}>{email}</strong>.
+            It expires in an hour. Check your spam folder if it does not arrive.
+          </p>
+        </div>
+      ) : (
+        <form onSubmit={send} className="space-y-4">
+          {error && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 p-3 rounded-lg text-[13px]"
+              style={{ background: 'var(--adm-fault-wash)', color: 'var(--adm-fault)' }}
+            >
+              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+              {error}
+            </p>
+          )}
+          <TextField
+            label="Your admin email" type="email" required
+            value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="admin@afaq.dz"
+          />
+          <p className="flex items-center gap-2 text-xs" style={{ color: 'var(--adm-silk-faint)' }}>
+            <Mail size={13} /> Only addresses with console access can be reset here.
+          </p>
+        </form>
+      )}
+    </Modal>
   )
 }

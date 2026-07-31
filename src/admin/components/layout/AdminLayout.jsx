@@ -1,28 +1,39 @@
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TopNav from './TopNav'
+import CommandPalette from './CommandPalette'
 import ToastContainer from '../ui/ToastContainer'
 import useAdminStore from '../../store/adminStore'
+import '../../admin.css'
 
 export default function AdminLayout({ children }) {
-  const sidebarOpen = useAdminStore(s => s.sidebarOpen)
-  const toggleSidebar = useAdminStore(s => s.toggleSidebar)
+  const navExpanded = useAdminStore(s => s.navExpanded)
+  const theme = useAdminStore(s => s.theme)
+  const setMobileNav = useAdminStore(s => s.setMobileNav)
+  const { pathname } = useLocation()
+
+  // A route change should never leave the mobile drawer sitting open over the
+  // screen you just navigated to.
+  useEffect(() => { setMobileNav(false) }, [pathname, setMobileNav])
 
   return (
-    <div dir="ltr" style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
+    <div
+      dir="ltr"
+      className="adm adm-chassis min-h-screen"
+      data-theme={theme}
+      data-rail={navExpanded ? 'open' : 'closed'}
+    >
       <Sidebar />
-      {sidebarOpen && (
-        <div
-          onClick={() => toggleSidebar()}
-          className="fixed inset-0 z-30 lg:hidden"
-          style={{ background: 'rgba(0,0,0,0.3)' }}
-        />
-      )}
-      <TopNav />
-      <main className="pt-16 min-h-screen lg:ml-16">
-        <div className="p-8 max-w-7xl mx-auto">
-          {children}
-        </div>
-      </main>
+
+      <div className="adm-content min-h-screen flex flex-col">
+        <TopNav />
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8">
+          <div className="mx-auto w-full" style={{ maxWidth: 1240 }}>{children}</div>
+        </main>
+      </div>
+
+      <CommandPalette />
       <ToastContainer />
     </div>
   )

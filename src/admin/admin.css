@@ -1,0 +1,717 @@
+/* ══ AFAQ ADMIN — "BENCH" ════════════════════════════════════════════════════
+   The public site draws the club as a printed circuit board. This is the bench
+   console that board plugs into: silkscreen ink on a solder-mask chassis,
+   hairline traces, and exactly one thing allowed to glow — the status rail.
+
+   Everything is scoped under .adm so the public site is untouched. */
+
+.adm {
+  /* Chassis */
+  --adm-board: #f4f5f0;
+  --adm-board-sunk: #eaece5;
+  --adm-panel: #ffffff;
+  --adm-panel-hover: #f7f8f4;
+
+  /* Ink */
+  --adm-silk: #0a1220;
+  --adm-silk-dim: #5c6672;
+  --adm-silk-faint: #8a939d;
+
+  /* Traces */
+  --adm-trace: #dde0d8;
+  --adm-trace-strong: #c4c9bd;
+
+  /* Signal — the club blue */
+  --adm-signal: #2460e7;
+  --adm-signal-ink: #ffffff;
+  --adm-signal-wash: rgba(36, 96, 231, 0.09);
+  --adm-signal-edge: rgba(36, 96, 231, 0.28);
+
+  /* LEDs */
+  --adm-ok: #17924f;
+  --adm-ok-wash: rgba(23, 146, 79, 0.12);
+  --adm-wait: #c97a04;
+  --adm-wait-wash: rgba(201, 122, 4, 0.13);
+  --adm-fault: #d8402f;
+  --adm-fault-wash: rgba(216, 64, 47, 0.11);
+
+  /* Chart series. Assigned in fixed order and kept clear of the LED colours,
+     which are reserved for state. Both modes validated for colour-vision
+     separation against their own surface rather than flipped from each other. */
+  --adm-series-1: #2460e7;
+  --adm-series-2: #c2255c;
+  --adm-grid: #eceee7;
+
+  --adm-shadow: 0 1px 2px rgba(10, 18, 32, 0.05);
+  --adm-shadow-lift: 0 8px 28px -8px rgba(10, 18, 32, 0.18);
+
+  /* Type roles — pixel face is identity only, never body copy */
+  --adm-font-pixel: "Minecraft", ui-monospace, monospace;
+  --adm-font-ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --adm-font-data: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+
+  --adm-rail: 68px;
+  --adm-rail-open: 236px;
+  --adm-bar: 60px;
+
+  color-scheme: light;
+  background: var(--adm-board);
+  color: var(--adm-silk);
+  font-family: var(--adm-font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.adm[data-theme="dark"] {
+  --adm-board: #0b0f14;
+  --adm-board-sunk: #070a0e;
+  --adm-panel: #141b22;
+  --adm-panel-hover: #1a232c;
+
+  --adm-silk: #e6ebe4;
+  --adm-silk-dim: #93a0ab;
+  --adm-silk-faint: #6b7883;
+
+  --adm-trace: #243039;
+  --adm-trace-strong: #33424e;
+
+  --adm-signal: #5b93ff;
+  --adm-signal-ink: #06111f;
+  --adm-signal-wash: rgba(91, 147, 255, 0.13);
+  --adm-signal-edge: rgba(91, 147, 255, 0.34);
+
+  --adm-ok: #35c47a;
+  --adm-ok-wash: rgba(53, 196, 122, 0.14);
+  --adm-wait: #e8a33c;
+  --adm-wait-wash: rgba(232, 163, 60, 0.15);
+  --adm-fault: #f4705f;
+  --adm-fault-wash: rgba(244, 112, 95, 0.14);
+
+  --adm-series-1: #4c86ee;
+  --adm-series-2: #db5e8e;
+  --adm-grid: #1e2831;
+
+  --adm-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --adm-shadow-lift: 0 10px 34px -10px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .adm[data-theme="system"] {
+    --adm-board: #0b0f14;
+    --adm-board-sunk: #070a0e;
+    --adm-panel: #141b22;
+    --adm-panel-hover: #1a232c;
+    --adm-silk: #e6ebe4;
+    --adm-silk-dim: #93a0ab;
+    --adm-silk-faint: #6b7883;
+    --adm-trace: #243039;
+    --adm-trace-strong: #33424e;
+    --adm-signal: #5b93ff;
+    --adm-signal-ink: #06111f;
+    --adm-signal-wash: rgba(91, 147, 255, 0.13);
+    --adm-signal-edge: rgba(91, 147, 255, 0.34);
+    --adm-ok: #35c47a;
+    --adm-ok-wash: rgba(53, 196, 122, 0.14);
+    --adm-wait: #e8a33c;
+    --adm-wait-wash: rgba(232, 163, 60, 0.15);
+    --adm-fault: #f4705f;
+    --adm-fault-wash: rgba(244, 112, 95, 0.14);
+    --adm-series-1: #4c86ee;
+    --adm-series-2: #db5e8e;
+    --adm-grid: #1e2831;
+    --adm-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --adm-shadow-lift: 0 10px 34px -10px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+
+/* The public stylesheet forces the pixel face onto every heading with
+   !important. Out-rank it inside the console — headings here are UI, not
+   identity. */
+.adm h1,
+.adm h2,
+.adm h3,
+.adm h4,
+.adm h5,
+.adm h6 {
+  font-family: var(--adm-font-ui) !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.011em;
+  color: var(--adm-silk);
+}
+
+.adm input,
+.adm textarea,
+.adm select,
+.adm button {
+  font-family: inherit;
+}
+
+/* The public stylesheet swaps every font to the Arabic face with
+   `[dir="rtl"] body *`, keyed off <html dir> — so a visitor choosing Arabic on
+   the site re-skinned the whole console, which is English-only and set left to
+   right. Out-rank that rule; the console keeps its own type in any language. */
+[dir="rtl"] .adm,
+[dir="rtl"] .adm *,
+[dir="rtl"] .adm h1,
+[dir="rtl"] .adm h2,
+[dir="rtl"] .adm h3,
+[dir="rtl"] .adm h4,
+[dir="rtl"] .adm h5,
+[dir="rtl"] .adm h6 {
+  font-family: var(--adm-font-ui) !important;
+}
+
+[dir="rtl"] .adm .adm-pixel,
+[dir="rtl"] .adm .adm-eyebrow,
+[dir="rtl"] .adm .adm-channel-count,
+[dir="rtl"] .adm .adm-table th {
+  font-family: var(--adm-font-pixel) !important;
+}
+
+[dir="rtl"] .adm .adm-data,
+[dir="rtl"] .adm kbd {
+  font-family: var(--adm-font-data) !important;
+}
+
+/* Arabic translations typed into a form field keep the Arabic face. */
+[dir="rtl"] .adm [dir="rtl"],
+.adm [dir="rtl"] {
+  font-family: "Unixel", var(--adm-font-ui) !important;
+}
+
+/* ── Type roles ─────────────────────────────────────────────────────────── */
+
+/* Identity. Wordmark and section eyebrows only. */
+.adm-pixel {
+  font-family: var(--adm-font-pixel);
+  letter-spacing: 0.02em;
+}
+
+.adm-eyebrow {
+  font-family: var(--adm-font-pixel);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--adm-silk-faint);
+}
+
+/* Data. IDs, timestamps, counts — anything you scan a column of. */
+.adm-data {
+  font-family: var(--adm-font-data);
+  font-size: 0.875em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+
+.adm-panel {
+  background: var(--adm-panel);
+  border: 1px solid var(--adm-trace);
+  border-radius: 14px;
+}
+
+.adm-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--adm-trace);
+}
+
+/* ── Status rail — the one element allowed to glow ──────────────────────── */
+
+.adm-rail-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  background: var(--adm-panel);
+  border: 1px solid var(--adm-trace);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.adm-channel {
+  position: relative;
+  flex: 1 1 168px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-right: 1px solid var(--adm-trace);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.adm-channel:last-child {
+  border-right: 0;
+}
+
+.adm-channel:hover {
+  background: var(--adm-panel-hover);
+}
+
+.adm-channel:focus-visible {
+  outline: 2px solid var(--adm-signal);
+  outline-offset: -2px;
+}
+
+.adm-led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--adm-ok);
+  box-shadow: 0 0 0 3px var(--adm-ok-wash);
+}
+
+.adm-led[data-state="wait"] {
+  background: var(--adm-wait);
+  box-shadow: 0 0 0 3px var(--adm-wait-wash);
+  animation: adm-pulse 2.4s ease-in-out infinite;
+}
+
+.adm-led[data-state="fault"] {
+  background: var(--adm-fault);
+  box-shadow: 0 0 0 3px var(--adm-fault-wash);
+  animation: adm-pulse 1.6s ease-in-out infinite;
+}
+
+.adm-led[data-state="idle"] {
+  background: var(--adm-trace-strong);
+  box-shadow: none;
+}
+
+@keyframes adm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+
+.adm-channel-count {
+  font-family: var(--adm-font-pixel);
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--adm-silk);
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
+.adm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--adm-trace);
+  background: var(--adm-panel);
+  color: var(--adm-silk);
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.adm-btn:hover:not(:disabled) {
+  background: var(--adm-panel-hover);
+  border-color: var(--adm-trace-strong);
+}
+
+.adm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adm-btn-primary {
+  background: var(--adm-signal);
+  border-color: var(--adm-signal);
+  color: var(--adm-signal-ink);
+}
+
+.adm-btn-primary:hover:not(:disabled) {
+  background: var(--adm-signal);
+  border-color: var(--adm-signal);
+  filter: brightness(1.08);
+}
+
+.adm-btn-danger {
+  background: var(--adm-fault);
+  border-color: var(--adm-fault);
+  color: #fff;
+}
+
+.adm-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--adm-fault);
+  border-color: var(--adm-fault);
+}
+
+.adm-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.adm-btn-ghost:hover:not(:disabled) {
+  background: var(--adm-signal-wash);
+  border-color: transparent;
+  color: var(--adm-signal);
+}
+
+.adm-btn-sm {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.adm-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--adm-silk-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.adm-icon-btn:hover:not(:disabled) {
+  background: var(--adm-signal-wash);
+  color: var(--adm-signal);
+}
+
+.adm-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.adm-icon-btn[data-danger="true"]:hover:not(:disabled) {
+  background: var(--adm-fault-wash);
+  color: var(--adm-fault);
+}
+
+/* Keyboard focus is never optional. */
+.adm :focus-visible {
+  outline: 2px solid var(--adm-signal);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Fields ─────────────────────────────────────────────────────────────── */
+
+.adm-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--adm-trace);
+  background: var(--adm-board);
+  color: var(--adm-silk);
+  font-size: 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.adm-input::placeholder {
+  color: var(--adm-silk-faint);
+}
+
+.adm-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--adm-trace-strong);
+}
+
+.adm-input:focus {
+  outline: none;
+  border-color: var(--adm-signal);
+  background: var(--adm-panel);
+  box-shadow: 0 0 0 3px var(--adm-signal-wash);
+}
+
+.adm-input[aria-invalid="true"] {
+  border-color: var(--adm-fault);
+}
+
+.adm-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px var(--adm-fault-wash);
+}
+
+.adm-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+textarea.adm-input {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+select.adm-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 51%, calc(100% - 10px) 51%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
+.adm-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--adm-silk-dim);
+}
+
+.adm-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--adm-signal);
+  cursor: pointer;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────────── */
+
+.adm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--adm-board-sunk);
+  color: var(--adm-silk-dim);
+}
+
+.adm-badge[data-tone="ok"] {
+  background: var(--adm-ok-wash);
+  color: var(--adm-ok);
+}
+.adm-badge[data-tone="wait"] {
+  background: var(--adm-wait-wash);
+  color: var(--adm-wait);
+}
+.adm-badge[data-tone="fault"] {
+  background: var(--adm-fault-wash);
+  color: var(--adm-fault);
+}
+.adm-badge[data-tone="signal"] {
+  background: var(--adm-signal-wash);
+  color: var(--adm-signal);
+}
+
+/* Content sits beside the rail only where the rail exists. Below the
+   breakpoint the rail is a drawer, so the offset must be zero — the previous
+   layout hard-coded a left margin and left a dead 64px strip on phones. */
+.adm-content {
+  margin-left: 0;
+  transition: margin-left 0.18s ease;
+}
+
+@media (min-width: 1024px) {
+  .adm[data-rail="open"] .adm-content {
+    margin-left: var(--adm-rail-open);
+  }
+  .adm[data-rail="closed"] .adm-content {
+    margin-left: var(--adm-rail);
+  }
+}
+
+/* ── Navigation ─────────────────────────────────────────────────────────── */
+
+.adm-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--adm-silk-dim);
+  font-size: 14px;
+  font-weight: 550;
+  text-decoration: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.adm-nav-link:hover {
+  background: var(--adm-panel-hover);
+  color: var(--adm-silk);
+}
+
+.adm-nav-link[aria-current="page"] {
+  background: var(--adm-signal-wash);
+  color: var(--adm-signal);
+}
+
+/* Active trace — the board routing a connection to the live module. */
+.adm-nav-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 11px;
+  bottom: 11px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--adm-signal);
+}
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+
+.adm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+.adm-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px;
+  text-align: left;
+  font-family: var(--adm-font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--adm-silk-faint);
+  background: var(--adm-board-sunk);
+  border-bottom: 1px solid var(--adm-trace);
+  white-space: nowrap;
+}
+
+.adm-table th[data-sortable="true"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.adm-table th[data-sortable="true"]:hover {
+  color: var(--adm-silk);
+}
+
+.adm-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--adm-trace);
+  color: var(--adm-silk);
+  vertical-align: middle;
+}
+
+.adm-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.adm-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.adm-table tbody tr:hover {
+  background: var(--adm-panel-hover);
+}
+
+.adm-table tbody tr[data-selected="true"] {
+  background: var(--adm-signal-wash);
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
+
+.adm-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.adm-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.adm-scroll::-webkit-scrollbar-thumb {
+  background: var(--adm-trace-strong);
+  border-radius: 999px;
+  border: 3px solid var(--adm-board);
+}
+
+.adm-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--adm-board-sunk) 25%,
+    var(--adm-trace) 50%,
+    var(--adm-board-sunk) 75%
+  );
+  background-size: 200% 100%;
+  animation: adm-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes adm-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.adm-spin {
+  animation: adm-rotate 0.8s linear infinite;
+}
+
+@keyframes adm-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.adm-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Dot-grid chassis, borrowed from the public board. Sits behind the console
+   at very low contrast — texture, not decoration. */
+.adm-chassis {
+  background-color: var(--adm-board);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--adm-signal) 11%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm *,
+  .adm *::before,
+  .adm *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ScrollToTop from './components/shared/ScrollToTop'
 import Home from './pages/Home'
@@ -26,12 +26,18 @@ import AnnouncementsPage from './admin/pages/AnnouncementsPage'
 import AdminUsersPage from './admin/pages/AdminUsersPage'
 import SettingsPage from './admin/pages/SettingsPage'
 import AIKnowledgePage from './admin/pages/AIKnowledgePage'
+import ActivityPage from './admin/pages/ActivityPage'
+import AdminNotFound from './admin/pages/NotFound'
 import ProtectedRoute from './admin/components/guards/ProtectedRoute'
 import RoleGuard from './admin/components/guards/RoleGuard'
 import Chatbot from './components/chatbot/Chatbot'
 
 export default function App() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // The visitor chatbot is for the public site; it used to float over the
+  // admin console too, covering the toast area.
+  const isAdmin = pathname.startsWith('/admin')
 
   useEffect(() => {
     const hash = window.location.hash
@@ -59,27 +65,47 @@ export default function App() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<Login />} />
         <Route path="/admin/reset-password" element={<ResetPassword />} />
+        {/* Every screen is guarded by the same permission the sidebar uses to
+            decide whether to show its link. */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route index element={<Dashboard />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="registrations" element={<RegistrationsPage />} />
-          <Route path="membership" element={<MembershipPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
-          <Route path="gallery" element={<GalleryPage />} />
-          <Route path="messages" element={<MessagesPage />} />
-          <Route path="announcements" element={<AnnouncementsPage />} />
-          <Route path="admins" element={
-            <RoleGuard role="super_admin"><AdminUsersPage /></RoleGuard>
+          <Route path="events" element={
+            <RoleGuard permission="events.manage"><EventsPage /></RoleGuard>
           } />
-          <Route path="settings" element={
-            <RoleGuard role="super_admin"><SettingsPage /></RoleGuard>
+          <Route path="registrations" element={
+            <RoleGuard permission="events.registrations.manage"><RegistrationsPage /></RoleGuard>
+          } />
+          <Route path="membership" element={
+            <RoleGuard permission="membership.manage"><MembershipPage /></RoleGuard>
+          } />
+          <Route path="projects" element={
+            <RoleGuard permission="projects.manage"><ProjectsPage /></RoleGuard>
+          } />
+          <Route path="gallery" element={
+            <RoleGuard permission="gallery.manage"><GalleryPage /></RoleGuard>
+          } />
+          <Route path="messages" element={
+            <RoleGuard permission="messages.view"><MessagesPage /></RoleGuard>
+          } />
+          <Route path="announcements" element={
+            <RoleGuard permission="announcements.manage"><AnnouncementsPage /></RoleGuard>
+          } />
+          <Route path="admins" element={
+            <RoleGuard permission="admin_users.manage"><AdminUsersPage /></RoleGuard>
           } />
           <Route path="ai-knowledge" element={
-            <RoleGuard role="super_admin"><AIKnowledgePage /></RoleGuard>
+            <RoleGuard permission="ai_knowledge.manage"><AIKnowledgePage /></RoleGuard>
           } />
+          <Route path="activity" element={
+            <RoleGuard permission="activity.view"><ActivityPage /></RoleGuard>
+          } />
+          <Route path="settings" element={
+            <RoleGuard permission="settings.manage"><SettingsPage /></RoleGuard>
+          } />
+          <Route path="*" element={<AdminNotFound />} />
         </Route>
       </Routes>
-      <Chatbot />
+      {!isAdmin && <Chatbot />}
     </>
   )
 }

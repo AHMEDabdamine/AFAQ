@@ -1,134 +1,207 @@
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
-  LayoutDashboard, Calendar, ClipboardCheck, FolderGit2, Image,
-  Mail, Megaphone, Shield, Settings, ChevronLeft, ChevronRight, LogOut, UserCheck, Brain,
+  Brain, Calendar, CircuitBoard, ClipboardCheck, Gauge, Images, Mail, Megaphone,
+  PanelLeftClose, PanelLeftOpen, ScrollText, Shield, SlidersHorizontal, UserCheck, X,
 } from 'lucide-react'
 import useAdminStore from '../../store/adminStore'
+import { NAV_GROUPS, navItemsFor } from '../../lib/permissions'
 
-const iconMap = {
-  LayoutDashboard, Calendar, ClipboardCheck, FolderGit2, Image,
-  Mail, Megaphone, Shield, Settings, UserCheck, Brain,
+const ICONS = {
+  Gauge, Calendar, ClipboardCheck, UserCheck, Mail,
+  CircuitBoard, Images, Megaphone,
+  Shield, Brain, ScrollText, SlidersHorizontal,
 }
 
-const NAV_ITEMS = [
-  { label: 'Overview', path: '/admin', icon: 'LayoutDashboard', roles: null },
-  { label: 'Events', path: '/admin/events', icon: 'Calendar', roles: ['super_admin', 'event_manager'] },
-  { label: 'Membership', path: '/admin/membership', icon: 'UserCheck', roles: ['super_admin', 'event_manager'] },
-  { label: 'Event Registration', path: '/admin/registrations', icon: 'ClipboardCheck', roles: ['super_admin', 'event_manager'] },
-  { label: 'Projects', path: '/admin/projects', icon: 'FolderGit2', roles: ['super_admin', 'project_manager'] },
-  { label: 'Gallery', path: '/admin/gallery', icon: 'Image', roles: ['super_admin', 'media_manager'] },
-  { label: 'Messages', path: '/admin/messages', icon: 'Mail', roles: null },
-  { label: 'Announcements', path: '/admin/announcements', icon: 'Megaphone', roles: null },
-  { label: 'Admins', path: '/admin/admins', icon: 'Shield', roles: ['super_admin'] },
-  { label: 'AI Knowledge', path: '/admin/ai-knowledge', icon: 'Brain', roles: ['super_admin'] },
-  { label: 'Settings', path: '/admin/settings', icon: 'Settings', roles: ['super_admin'] },
-]
+/** Queues surface as a count on the nav item that clears them. */
+const BADGE_KEY = {
+  '/admin/registrations': 'pendingRegistrations',
+  '/admin/membership': 'pendingMembership',
+  '/admin/messages': 'unreadMessages',
+}
 
-export default function Sidebar() {
-  const [hovered, setHovered] = useState(false)
-  const open = useAdminStore(s => s.sidebarOpen)
-  const toggle = useAdminStore(s => s.toggleSidebar)
+function NavList({ expanded, onNavigate }) {
   const role = useAdminStore(s => s.role())
-  const logout = useAdminStore(s => s.logout)
-  const profile = useAdminStore(s => s.adminProfile)
-
-  const expanded = open || hovered
-
-  const linkStyle = ({ isActive }) => ({
-    background: isActive ? `${'var(--color-accent)'}12` : 'transparent',
-    color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
-  })
+  const counts = useAdminStore(s => s.counts)
+  const items = navItemsFor(role)
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Collapsed strip — always visible on desktop */}
-      <aside className="hidden lg:flex flex-col h-screen fixed left-0 top-0 z-40 border-r" style={{ width: 64, background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-        <div className="flex items-center justify-center h-16 border-b shrink-0" style={{ borderColor: 'var(--color-border-light)' }}>
-          <button onClick={toggle} className="admin-icon-btn w-9 h-9 flex items-center justify-center rounded-lg transition-all hover:scale-105" style={{ color: 'var(--color-text-muted)' }} title="Open sidebar">
-            <ChevronRight size={20} />
-          </button>
+    <nav className="flex-1 adm-scroll overflow-y-auto px-3 py-3">
+      {NAV_GROUPS.map(group => {
+        const groupItems = items.filter(item => item.group === group.id)
+        if (!groupItems.length) return null
+
+        return (
+          <div key={group.id} className="mb-4 last:mb-0">
+            {expanded ? (
+              <p className="adm-eyebrow px-3 mb-2">{group.label}</p>
+            ) : (
+              <div
+                className="mx-3 mb-2"
+                style={{ height: 1, background: 'var(--adm-trace)' }}
+                aria-hidden="true"
+              />
+            )}
+            <ul className="space-y-0.5">
+              {groupItems.map(item => {
+                const Icon = ICONS[item.icon] || Gauge
+                const badge = counts[BADGE_KEY[item.path]] || 0
+                return (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      end={item.end}
+                      onClick={onNavigate}
+                      className="adm-nav-link"
+                      style={{ justifyContent: expanded ? 'flex-start' : 'center', paddingInline: expanded ? 12 : 0 }}
+                      title={expanded ? undefined : item.label}
+                    >
+                      <span className="relative shrink-0 flex">
+                        <Icon size={18} />
+                        {/* Collapsed rail keeps the signal without the number. */}
+                        {!expanded && badge > 0 && (
+                          <span
+                            className="absolute -top-1 -right-1.5 rounded-full"
+                            style={{ width: 6, height: 6, background: 'var(--adm-wait)' }}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </span>
+                      {expanded && (
+                        <>
+                          <span className="flex-1 adm-truncate">{item.label}</span>
+                          {badge > 0 && (
+                            <span
+                              className="adm-data text-[11px] px-1.5 rounded-md shrink-0"
+                              style={{ background: 'var(--adm-wait-wash)', color: 'var(--adm-wait)' }}
+                            >
+                              {badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {!expanded && <span className="sr-only">{item.label}</span>}
+                    </NavLink>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
+    </nav>
+  )
+}
+
+function Wordmark({ expanded }) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <span
+        className="adm-pixel flex items-center justify-center shrink-0"
+        style={{
+          width: 30, height: 30, borderRadius: 8, fontSize: 13,
+          background: 'var(--adm-signal)', color: 'var(--adm-signal-ink)',
+        }}
+        aria-hidden="true"
+      >
+        A
+      </span>
+      {expanded && (
+        <span className="min-w-0">
+          <span className="adm-pixel block text-[13px] leading-none tracking-wider" style={{ color: 'var(--adm-silk)' }}>
+            AFAQ
+          </span>
+          <span className="adm-eyebrow block mt-1">Console</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+export default function Sidebar() {
+  const expanded = useAdminStore(s => s.navExpanded)
+  const toggleNav = useAdminStore(s => s.toggleNav)
+  const mobileOpen = useAdminStore(s => s.mobileNavOpen)
+  const setMobileNav = useAdminStore(s => s.setMobileNav)
+
+  return (
+    <>
+      {/* Desktop rail. Collapsing is a deliberate click that sticks, not a
+          panel that flies out whenever the pointer crosses the left edge. */}
+      <aside
+        className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 z-40"
+        style={{
+          width: expanded ? 'var(--adm-rail-open)' : 'var(--adm-rail)',
+          background: 'var(--adm-panel)',
+          borderRight: '1px solid var(--adm-trace)',
+          transition: 'width 0.18s ease',
+        }}
+      >
+        <div
+          className="flex items-center shrink-0 px-4"
+          style={{ height: 'var(--adm-bar)', justifyContent: expanded ? 'space-between' : 'center', gap: 8 }}
+        >
+          <Wordmark expanded={expanded} />
+          {expanded && (
+            <button type="button" onClick={toggleNav} className="adm-icon-btn shrink-0" aria-label="Collapse navigation">
+              <PanelLeftClose size={17} />
+            </button>
+          )}
         </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {NAV_ITEMS.map(item => {
-            if (item.roles && !item.roles.includes(role)) return null
-            const Icon = iconMap[item.icon]
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/admin'}
-                className="admin-nav-link flex items-center justify-center px-0 py-3 rounded-xl text-base font-medium transition-all hover:scale-105"
-                style={linkStyle}
-              >
-                <Icon size={20} />
-              </NavLink>
-            )
-          })}
-        </nav>
-        <div className="p-4 border-t shrink-0" style={{ borderColor: 'var(--color-border-light)' }}>
-          <button
-            onClick={logout}
-            className="admin-icon-btn flex items-center justify-center w-full px-0 py-3 rounded-xl text-base font-medium transition-all hover:scale-105"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <LogOut size={20} />
-          </button>
-        </div>
+
+        <NavList expanded={expanded} />
+
+        {!expanded && (
+          <div className="p-3 shrink-0 flex justify-center">
+            <button type="button" onClick={toggleNav} className="adm-icon-btn" aria-label="Expand navigation">
+              <PanelLeftOpen size={17} />
+            </button>
+          </div>
+        )}
       </aside>
 
-      {/* Expanded overlay sidebar — slides in from left on hover or click */}
-      <motion.aside
-        initial={false}
-        animate={{ x: expanded ? 0 : -240 }}
-        transition={{ type: 'spring', damping: 24, stiffness: 260 }}
-        className="fixed left-0 top-0 z-50 h-screen flex flex-col border-r"
-        style={{ width: 240, background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}
-      >
-        <div className="flex items-center justify-end h-16 px-4 border-b shrink-0" style={{ borderColor: 'var(--color-border-light)' }}>
-          <button onClick={toggle} className="admin-icon-btn w-9 h-9 flex items-center justify-center rounded-lg transition-all hover:scale-105" style={{ color: 'var(--color-text-muted)' }}>
-            <ChevronLeft size={22} />
-          </button>
-        </div>
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {NAV_ITEMS.map(item => {
-            if (item.roles && !item.roles.includes(role)) return null
-            const Icon = iconMap[item.icon]
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/admin'}
-                onClick={() => { toggle(); setHovered(false) }}
-                className="admin-nav-link flex items-center gap-3.5 px-4 py-3 rounded-xl text-[15px] font-medium transition-all hover:scale-[1.02]"
-                style={linkStyle}
+      {/* Mobile drawer. The old console had none — below the desktop breakpoint
+          the rail was hidden and its toggle went with it, leaving no way to
+          reach any screen but the one you landed on. */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <div className="lg:hidden fixed inset-0 z-[70]">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0"
+              style={{ background: 'rgba(6, 10, 16, 0.5)' }}
+              onClick={() => setMobileNav(false)}
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+              className="absolute left-0 top-0 bottom-0 w-[262px] flex flex-col"
+              style={{ background: 'var(--adm-panel)', borderRight: '1px solid var(--adm-trace)' }}
+              aria-label="Console navigation"
+            >
+              <div
+                className="flex items-center justify-between px-4 shrink-0"
+                style={{ height: 'var(--adm-bar)', borderBottom: '1px solid var(--adm-trace)' }}
               >
-                <Icon size={20} className="shrink-0" />
-                <span>{item.label}</span>
-              </NavLink>
-            )
-          })}
-        </nav>
-        <div className="p-3 border-t shrink-0" style={{ borderColor: 'var(--color-border-light)' }}>
-          {profile && (
-            <div className="px-4 py-2.5 mb-2 text-sm truncate" style={{ color: 'var(--color-text-muted)' }}>
-              {profile.full_name || profile.email}
-            </div>
-          )}
-          <button
-            onClick={logout}
-            className="admin-icon-btn flex items-center gap-3.5 w-full px-4 py-3 rounded-xl text-[15px] font-medium transition-all hover:scale-[1.02]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <LogOut size={20} className="shrink-0" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </motion.aside>
-    </div>
+                <Wordmark expanded />
+                <button
+                  type="button"
+                  onClick={() => setMobileNav(false)}
+                  className="adm-icon-btn"
+                  aria-label="Close navigation"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <NavList expanded onNavigate={() => setMobileNav(false)} />
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

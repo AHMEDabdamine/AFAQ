@@ -3,8 +3,15 @@ import {
   getAllKnowledge, getPublishedKnowledge, getKnowledgeByCategory,
   createKnowledge, updateKnowledge, deleteKnowledge,
 } from '../repositories/aiKnowledgeRepository.js'
+import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = Router()
+
+/**
+ * Reads stay public — the site's chatbot calls them anonymously. Writes are
+ * super-admin only; they used to be open to anyone who knew the URL.
+ */
+const requireEditor = [requireAuth, requireRole('super_admin')]
 
 function slugify(text) {
   return text.toString().toLowerCase().trim()
@@ -51,7 +58,7 @@ router.get('/categories', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireEditor, async (req, res) => {
   try {
     const { title, category, content, keywords, published } = req.body
     if (!title || !content) {
@@ -70,7 +77,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireEditor, async (req, res) => {
   try {
     const { id } = req.params
     const data = { ...req.body }
@@ -85,7 +92,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.patch('/:id/publish', async (req, res) => {
+router.patch('/:id/publish', requireEditor, async (req, res) => {
   try {
     const { id } = req.params
     const { published } = req.body
@@ -97,7 +104,7 @@ router.patch('/:id/publish', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireEditor, async (req, res) => {
   try {
     await deleteKnowledge(Number(req.params.id))
     res.json({ ok: true })

@@ -1,227 +1,220 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Eye, EyeOff, Check, AlertCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { api } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import { PERMISSIONS } from '../lib/permissions'
+import { formatDate } from '../lib/format'
+import PageHeader from '../components/ui/PageHeader'
+import Panel, { PanelHead } from '../components/ui/Panel'
+import Button from '../components/ui/Button'
+import { TextField } from '../components/ui/Field'
+
+const THEMES = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'Match my device', icon: Monitor },
+]
+
+/** Permission keys read as `events.registrations.manage`; people do not. */
+const PERMISSION_LABELS = {
+  'admin_users.manage': 'Add and remove admins',
+  'events.manage': 'Create and publish events',
+  'events.registrations.manage': 'Approve event registrations',
+  'membership.manage': 'Approve membership applications',
+  'projects.manage': 'Create and publish projects',
+  'gallery.manage': 'Manage gallery albums and photos',
+  'messages.view': 'Read contact messages',
+  'announcements.manage': 'Post announcements',
+  'ai_knowledge.manage': 'Edit the chatbot knowledge base',
+  'activity.view': 'See the activity log',
+  'settings.manage': 'Change console settings',
+}
 
 export default function SettingsPage() {
-  const adminProfile = useAdminStore(s => s.adminProfile)
+  const profile = useAdminStore(s => s.adminProfile)
   const addToast = useAdminStore(s => s.addToast)
+  const theme = useAdminStore(s => s.theme)
+  const setTheme = useAdminStore(s => s.setTheme)
 
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Console"
+        title="Settings"
+        description="Your account and how this console looks to you. These changes affect nobody else."
+      />
+
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
+        <div className="space-y-5">
+          <ProfileCard profile={profile} addToast={addToast} />
+          <PasswordCard addToast={addToast} />
+        </div>
+
+        <div className="space-y-5">
+          <Panel>
+            <PanelHead eyebrow="Appearance" title="Theme" description="Applies to this console only, on this device." />
+            <div className="p-5 flex flex-wrap gap-2">
+              {THEMES.map(option => {
+                const Icon = option.icon
+                const active = theme === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setTheme(option.value)}
+                    aria-pressed={active}
+                    className="adm-btn"
+                    style={
+                      active
+                        ? { borderColor: 'var(--adm-signal)', color: 'var(--adm-signal)', background: 'var(--adm-signal-wash)' }
+                        : undefined
+                    }
+                  >
+                    <Icon size={15} />
+                    {option.label}
+                    {active && <Check size={14} />}
+                  </button>
+                )
+              })}
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHead
+              eyebrow="Access"
+              title={profile?.role?.label || 'Role'}
+              description={profile?.role?.description || 'What this role is allowed to do in the console.'}
+            />
+            <div className="p-5">
+              <ul className="space-y-2">
+                {(PERMISSIONS[profile?.role?.name] || []).map(permission => (
+                  <li key={permission} className="flex items-center gap-2.5 text-sm">
+                    <Check size={15} style={{ color: 'var(--adm-ok)', flexShrink: 0 }} />
+                    <span style={{ color: 'var(--adm-silk-dim)' }}>
+                      {PERMISSION_LABELS[permission] || permission}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs mt-4 pt-4" style={{ borderTop: '1px solid var(--adm-trace)', color: 'var(--adm-silk-faint)' }}>
+                Only a super admin can change roles. Ask one if you need more access.
+              </p>
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProfileCard({ profile, addToast }) {
   const [fullName, setFullName] = useState('')
   const [saving, setSaving] = useState(false)
-  const [profileErr, setProfileErr] = useState('')
-  const [profileOk, setProfileOk] = useState(false)
+  const [error, setError] = useState('')
 
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [showCurrent, setShowCurrent] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [showNew, setShowNew] = useState(false)
-  const [passwordErr, setPasswordErr] = useState('')
-  const [passwordOk, setPasswordOk] = useState(false)
-  const [changingPassword, setChangingPassword] = useState(false)
+  useEffect(() => { setFullName(profile?.full_name || '') }, [profile])
 
-  useEffect(() => {
-    if (adminProfile?.full_name) setFullName(adminProfile.full_name)
-  }, [adminProfile])
+  const dirty = fullName.trim() !== (profile?.full_name || '')
 
-  const handleProfileSubmit = async (e) => {
+  const save = async e => {
     e.preventDefault()
-    if (!fullName.trim()) return
+    if (!fullName.trim()) { setError('Your name cannot be empty.'); return }
+
     setSaving(true)
-    setProfileErr('')
-    setProfileOk(false)
-    try {
-      const token = (await import('../../lib/supabase')).supabase.auth.getSession().then(({ data: { session } }) => session?.access_token)
-      const res = await fetch('/api/admin/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${await token}`,
-        },
-        body: JSON.stringify({ full_name: fullName.trim() }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error || 'Failed to update profile')
-      }
-      const { profile } = await res.json()
-      useAdminStore.setState({ adminProfile: profile })
-      setProfileOk(true)
-      addToast('Profile updated successfully')
-    } catch (err) {
-      setProfileErr(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
+    setError('')
+    const { ok, data, message } = await api('/api/admin/profile', {
+      method: 'PUT',
+      body: { full_name: fullName.trim() },
+    })
+    setSaving(false)
 
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault()
-    if (!currentPassword) {
-      setPasswordErr('Current password is required.')
-      return
-    }
-    if (newPassword.length < 8) {
-      setPasswordErr('New password must be at least 8 characters.')
-      return
-    }
-    setChangingPassword(true)
-    setPasswordErr('')
-    setPasswordOk(false)
-    try {
-      const token = (await import('../../lib/supabase')).supabase.auth.getSession().then(({ data: { session } }) => session?.access_token)
-      const res = await fetch('/api/admin/password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${await token}`,
-        },
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error || 'Failed to update password')
-      }
-      setCurrentPassword('')
-      setNewPassword('')
-      setPasswordOk(true)
-      addToast('Password updated successfully')
-    } catch (err) {
-      setPasswordErr(err.message)
-    } finally {
-      setChangingPassword(false)
-    }
+    if (!ok) { setError(message); return }
+    if (data?.profile) useAdminStore.setState({ adminProfile: data.profile })
+    addToast('Your name has been updated.')
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>Admin settings</p>
-
-      <div className="space-y-6 max-w-2xl">
-        {/* Profile */}
-        <div className="rounded-2xl border p-5" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Profile</h2>
-          <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>{adminProfile?.email}</p>
-
-          <form onSubmit={handleProfileSubmit} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Full Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={e => { setFullName(e.target.value); setProfileOk(false) }}
-                className="w-full px-3 py-2 rounded-xl border text-sm"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Email</label>
-              <p className="text-sm py-2" style={{ color: 'var(--color-text-muted)' }}>{adminProfile?.email}</p>
-            </div>
-            {profileErr && (
-              <div className="flex items-center gap-2 text-xs" style={{ color: '#dc2626' }}>
-                <AlertCircle size={14} /> {profileErr}
-              </div>
-            )}
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={saving || !fullName.trim()}
-                className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-semibold text-white"
-                style={{ background: 'var(--color-accent)' }}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              {profileOk && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: '#16A34A' }}>
-                  <Check size={14} /> Saved
-                </span>
-              )}
-            </div>
-          </form>
+    <Panel as="form" onSubmit={save}>
+      <PanelHead eyebrow="Account" title="Your details" />
+      <div className="p-5 space-y-4">
+        <TextField
+          label="Full name" required
+          value={fullName} error={error}
+          onChange={e => { setFullName(e.target.value); setError('') }}
+        />
+        <div>
+          <span className="adm-label">Email</span>
+          <p className="adm-data text-sm" style={{ color: 'var(--adm-silk-dim)' }}>{profile?.email}</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--adm-silk-faint)' }}>
+            Ask a super admin to change the address you sign in with.
+          </p>
         </div>
-
-        {/* Password */}
-        <div className="rounded-2xl border p-5" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Change Password</h2>
-          <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>Set a new password for your account.</p>
-
-          <form onSubmit={handlePasswordSubmit} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Current Password</label>
-              <div className="relative">
-                <input
-                  type={showCurrent ? 'text' : 'password'}
-                  value={currentPassword}
-                  onChange={e => { setCurrentPassword(e.target.value); setPasswordOk(false) }}
-                  className="w-full px-3 py-2 rounded-xl border text-sm pr-10"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(!showCurrent)}
-                  className="admin-icon-btn absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>New Password</label>
-              <div className="relative">
-                <input
-                  type={showNew ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={e => { setNewPassword(e.target.value); setPasswordOk(false) }}
-                  className="w-full px-3 py-2 rounded-xl border text-sm pr-10"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-                  placeholder="••••••••"
-                  required
-                  minLength={8}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(!showNew)}
-                  className="admin-icon-btn absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-            {passwordErr && (
-              <div className="flex items-center gap-2 text-xs" style={{ color: '#dc2626' }}>
-                <AlertCircle size={14} /> {passwordErr}
-              </div>
-            )}
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={changingPassword || !currentPassword || newPassword.length < 8}
-                className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-semibold text-white"
-                style={{ background: 'var(--color-accent)' }}
-              >
-                {changingPassword ? 'Updating...' : 'Update Password'}
-              </button>
-              {passwordOk && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: '#16A34A' }}>
-                  <Check size={14} /> Password updated
-                </span>
-              )}
-            </div>
-          </form>
-        </div>
-
-        {/* Role info */}
-        <div className="rounded-2xl border p-5" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Role</h2>
-          <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adminProfile?.role?.label || '—'}</p>
+        <div className="flex items-center gap-3 pt-1">
+          <Button type="submit" variant="primary" busy={saving} busyLabel="Saving…" disabled={!dirty}>
+            Save changes
+          </Button>
+          {profile?.created_at && (
+            <span className="text-xs" style={{ color: 'var(--adm-silk-faint)' }}>
+              Admin since {formatDate(profile.created_at)}
+            </span>
+          )}
         </div>
       </div>
-    </motion.div>
+    </Panel>
+  )
+}
+
+function PasswordCard({ addToast }) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const submit = async e => {
+    e.preventDefault()
+    const found = {}
+    if (!current) found.current = 'Enter your current password.'
+    if (next.length < 8) found.next = 'Use at least 8 characters.'
+    if (next !== confirm) found.confirm = 'The two new passwords do not match.'
+    if (next && next === current) found.next = 'The new password must be different.'
+    if (Object.keys(found).length) { setErrors(found); return }
+
+    setSaving(true)
+    setErrors({})
+    const { ok, message } = await api('/api/admin/password', {
+      method: 'PUT',
+      body: { current_password: current, new_password: next },
+    })
+    setSaving(false)
+
+    if (!ok) { setErrors({ current: message }); return }
+    setCurrent(''); setNext(''); setConfirm('')
+    addToast('Your password has been changed.')
+  }
+
+  return (
+    <Panel as="form" onSubmit={submit}>
+      <PanelHead eyebrow="Account" title="Password" description="You stay signed in on this device after changing it." />
+      <div className="p-5 space-y-4">
+        <TextField
+          label="Current password" type="password" required autoComplete="current-password"
+          value={current} error={errors.current}
+          onChange={e => { setCurrent(e.target.value); setErrors({}) }}
+        />
+        <TextField
+          label="New password" type="password" required autoComplete="new-password"
+          hint="At least 8 characters."
+          value={next} error={errors.next}
+          onChange={e => { setNext(e.target.value); setErrors({}) }}
+        />
+        <TextField
+          label="Confirm new password" type="password" required autoComplete="new-password"
+          value={confirm} error={errors.confirm}
+          onChange={e => { setConfirm(e.target.value); setErrors({}) }}
+        />
+        <Button type="submit" variant="primary" busy={saving} busyLabel="Changing…">Change password</Button>
+      </div>
+    </Panel>
   )
 }

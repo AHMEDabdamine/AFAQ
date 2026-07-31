@@ -1,143 +1,296 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Trash2, Shield } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Loader2, Shield, ShieldOff, Trash2, UserPlus } from 'lucide-react'
+import { api, logActivity, read, run, supabase } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import { formatDate, initials } from '../lib/format'
+import PageHeader from '../components/ui/PageHeader'
 import DataTable from '../components/ui/DataTable'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Skeleton from '../components/ui/Skeleton'
-import EmptyState from '../components/ui/EmptyState'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Badge, { StatusBadge } from '../components/ui/Badge'
+import Panel from '../components/ui/Panel'
+import { SelectField, TextField } from '../components/ui/Field'
 
 export default function AdminUsersPage() {
+  const addToast = useAdminStore(s => s.addToast)
+  const me = useAdminStore(s => s.adminProfile)
+
   const [admins, setAdmins] = useState([])
   const [roles, setRoles] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const addToast = useAdminStore(s => s.addToast)
+  const [state, setState] = useState({ loading: true, error: null })
+  const [addOpen, setAddOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [working, setWorking] = useState({})
 
-  const [form, setForm] = useState({ email: '', full_name: '', password: '', role_id: '' })
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('admin_users').select('*, role:admin_roles(name, label)').order('created_at', { ascending: false }),
-      supabase.from('admin_roles').select('*'),
-    ]).then(([adminsRes, rolesRes]) => {
-      setAdmins(adminsRes.data || [])
-      setRoles(rolesRes.data || [])
-      setLoading(false)
-    })
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const [adminRes, roleRes] = await Promise.all([
+      read(supabase.from('admin_users').select('*, role:admin_roles(id, name, label, description)').order('created_at', { ascending: false })),
+      read(supabase.from('admin_roles').select('*').order('id')),
+    ])
+    if (!adminRes.ok) { setState({ loading: false, error: adminRes.message }); return }
+    setAdmins(adminRes.data || [])
+    setRoles(roleRes.data || [])
+    setState({ loading: false, error: null })
   }, [])
 
-  const openCreate = () => {
-    setForm({ email: '', full_name: '', password: '', role_id: roles[0]?.id || '' })
-    setModalOpen(true)
+  useEffect(() => { load() }, [load])
+
+  const toggleActive = async admin => {
+    setWorking(w => ({ ...w, [admin.id]: true }))
+    const next = !admin.is_active
+    const { ok } = await run(
+      supabase.from('admin_users').update({ is_active: next }).eq('id', admin.id),
+      {
+        success: next
+          ? `${admin.full_name || admin.email} can sign in again.`
+          : `${admin.full_name || admin.email} can no longer sign in.`,
+        failure: 'The account did not change.',
+      }
+    )
+    setWorking(w => ({ ...w, [admin.id]: false }))
+    if (ok) setAdmins(list => list.map(a => (a.id === admin.id ? { ...a, is_active: next } : a)))
   }
 
-  const session = useAdminStore(s => s.session)
-
-  const handleCreate = async () => {
-    if (form.password.length < 8) { addToast('Password must be at least 8 characters', 'error'); return }
-    setSaving(true)
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      addToast('Admin user created')
-      setModalOpen(false)
-      const { data: adminsData } = await supabase.from('admin_users').select('*, role:admin_roles(name, label)').order('created_at', { ascending: false })
-      setAdmins(adminsData || [])
-    } catch (err) {
-      addToast(err.message, 'error')
-    }
-    setSaving(false)
+  const remove = async () => {
+    const { ok, message } = await api(`/api/admin/users/${pendingDelete.id}`, { method: 'DELETE' })
+    if (!ok) { addToast(message, 'error'); return }
+    logActivity('deleted', 'admin_users', pendingDelete.id, { name: pendingDelete.full_name || pendingDelete.email })
+    addToast(`${pendingDelete.full_name || pendingDelete.email} removed.`)
+    setPendingDelete(null)
+    load()
   }
 
-  const handleDelete = async () => {
-    const res = await fetch(`/api/admin/users/${deleteId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session?.access_token}` },
-    })
-    const data = await res.json()
-    if (!res.ok) { addToast(data.error || 'Failed to delete', 'error'); return }
-    addToast('Admin deleted')
-    setDeleteId(null)
-    const { data: adminsData } = await supabase.from('admin_users').select('*, role:admin_roles(name, label)').order('created_at', { ascending: false })
-    setAdmins(adminsData || [])
-  }
-
-  const columns = [
-    { header: 'Name', accessorKey: 'full_name', cell: ({ row }) => <span className="font-medium">{row.original.full_name || '-'}</span> },
-    { header: 'Email', accessorKey: 'email' },
-    { header: 'Role', accessorKey: 'role', cell: ({ row }) => (
-      <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#2460e720', color: '#2460e7' }}>{row.original.role?.label}</span>
-    )},
-    { header: 'Status', accessorKey: 'is_active', cell: ({ row }) => (
-      row.original.is_active
-        ? <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#16a34a20', color: '#16a34a' }}>Active</span>
-        : <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#dc262620', color: '#dc2626' }}>Inactive</span>
-    )},
-    { header: 'Created', accessorKey: 'created_at', cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString() },
-    { header: '', id: 'actions', cell: ({ row }) => (
-      <button onClick={() => setDeleteId(row.original.id)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: '#dc2626' }}><Trash2 size={14} /></button>
-    )},
-  ]
-
-  if (loading) return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} style={{ height: 48 }} />)}</div>
+  const columns = useMemo(() => [
+    {
+      header: 'Admin',
+      accessorKey: 'full_name',
+      cell: ({ row }) => {
+        const a = row.original
+        const isMe = a.user_id === me?.user_id
+        return (
+          <span className="flex items-center gap-3 min-w-0">
+            {a.avatar_url ? (
+              <img src={a.avatar_url} alt="" className="rounded-lg object-cover shrink-0" style={{ width: 32, height: 32 }} />
+            ) : (
+              <span
+                className="adm-pixel flex items-center justify-center rounded-lg text-[11px] shrink-0"
+                style={{ width: 32, height: 32, background: 'var(--adm-board-sunk)', color: 'var(--adm-silk-dim)' }}
+                aria-hidden="true"
+              >
+                {initials(a.full_name || a.email)}
+              </span>
+            )}
+            <span className="min-w-0">
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-semibold adm-truncate" style={{ maxWidth: 180 }}>
+                  {a.full_name || '—'}
+                </span>
+                {isMe && <Badge tone="signal">You</Badge>}
+              </span>
+              <span className="adm-data block text-[11px] adm-truncate" style={{ color: 'var(--adm-silk-faint)', maxWidth: 210 }}>
+                {a.email}
+              </span>
+            </span>
+          </span>
+        )
+      },
+    },
+    {
+      header: 'Role',
+      id: 'role',
+      accessorFn: row => row.role?.label || '',
+      cell: ({ row }) => <Badge tone="signal">{row.original.role?.label || 'No role'}</Badge>,
+    },
+    {
+      header: 'Access',
+      accessorKey: 'is_active',
+      cell: ({ row }) => <StatusBadge status={row.original.is_active ? 'active' : 'inactive'} />,
+    },
+    {
+      header: 'Added',
+      accessorKey: 'created_at',
+      cell: ({ row }) => <span className="adm-data text-[12px]">{formatDate(row.original.created_at)}</span>,
+    },
+    {
+      header: '',
+      id: 'actions',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const a = row.original
+        const isMe = a.user_id === me?.user_id
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            {working[a.id] && <Loader2 size={14} className="adm-spin mr-1" style={{ color: 'var(--adm-silk-faint)' }} />}
+            {/* Locking yourself out of the console is not a recoverable mistake. */}
+            <IconButton
+              icon={a.is_active ? ShieldOff : Shield}
+              label={isMe ? 'You cannot change your own access' : a.is_active ? 'Suspend access' : 'Restore access'}
+              disabled={isMe || working[a.id]}
+              onClick={() => toggleActive(a)}
+            />
+            <IconButton
+              icon={Trash2}
+              label={isMe ? 'You cannot delete your own account' : 'Delete admin'}
+              danger
+              disabled={isMe}
+              onClick={() => setPendingDelete(a)}
+            />
+          </div>
+        )
+      },
+    },
+  ], [me, working]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Manage admin accounts</p>
-        <button onClick={openCreate} className="admin-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-          <Plus size={16} /> Add Admin
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        eyebrow="Console"
+        title="Admins"
+        description="Who can sign in to this console, and what each of them may change."
+        actions={<Button variant="primary" icon={UserPlus} onClick={() => setAddOpen(true)}>Add an admin</Button>}
+      />
 
-      {admins.length === 0 ? (
-        <EmptyState icon={Shield} title="No admin users" action={
-          <button onClick={openCreate} className="admin-btn-primary mt-4 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>Add Admin</button>
-        } />
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
       ) : (
-        <DataTable columns={columns} data={admins} searchable={false} />
+        <DataTable
+          columns={columns}
+          data={admins}
+          loading={state.loading}
+          getRowId={row => String(row.id)}
+          searchPlaceholder="Search admins…"
+          defaultPageSize={25}
+          emptyState={
+            <EmptyState
+              icon={Shield}
+              title="No admin accounts"
+              description="Add someone to give them access to this console."
+              action={<Button variant="primary" icon={UserPlus} onClick={() => setAddOpen(true)}>Add an admin</Button>}
+            />
+          }
+        />
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Admin User">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Full Name</label>
-            <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Email</label>
-            <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Password</label>
-            <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Role</label>
-            <select value={form.role_id} onChange={e => setForm({...form, role_id: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
-            <button onClick={() => setModalOpen(false)} className="admin-btn px-4 py-2 rounded-xl text-sm font-medium border" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>Cancel</button>
-            <button onClick={handleCreate} disabled={saving} className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-              {saving ? 'Creating...' : 'Create Admin'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {roles.length > 0 && (
+        <Panel className="mt-5 p-5">
+          <p className="adm-eyebrow mb-3">What each role may change</p>
+          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+            {roles.map(role => (
+              <div key={role.id} className="flex gap-3">
+                <dt className="text-sm font-semibold shrink-0" style={{ minWidth: 110 }}>{role.label}</dt>
+                <dd className="text-sm" style={{ color: 'var(--adm-silk-dim)' }}>
+                  {role.description || 'No description set.'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+      )}
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Admin" message="This will permanently remove this admin account." />
-    </motion.div>
+      <AddAdmin
+        open={addOpen}
+        roles={roles}
+        onClose={() => setAddOpen(false)}
+        onAdded={load}
+        addToast={addToast}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title="Delete this admin?"
+        message={
+          pendingDelete
+            ? `${pendingDelete.full_name || pendingDelete.email} loses console access immediately and their sign-in is deleted. To keep the account but block it, suspend access instead.`
+            : ''
+        }
+        confirmLabel="Delete admin"
+      />
+    </div>
+  )
+}
+
+function AddAdmin({ open, roles, onClose, onAdded, addToast }) {
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', role_id: '' })
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setForm({ full_name: '', email: '', password: '', role_id: roles[0]?.id || '' })
+      setErrors({})
+    }
+  }, [open, roles])
+
+  const set = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  const submit = async () => {
+    const next = {}
+    if (!form.full_name.trim()) next.full_name = 'Enter their name.'
+    if (!form.email.trim()) next.email = 'Enter an email address.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = 'That is not a valid email address.'
+    if (form.password.length < 8) next.password = 'Use at least 8 characters.'
+    if (!form.role_id) next.role_id = 'Pick a role.'
+    if (Object.keys(next).length) { setErrors(next); return }
+
+    setSaving(true)
+    const { ok, message } = await api('/api/admin/users', {
+      method: 'POST',
+      body: {
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role_id: form.role_id,
+      },
+    })
+    setSaving(false)
+    if (!ok) { addToast(message, 'error'); return }
+    addToast(`${form.full_name.trim()} can now sign in.`)
+    onClose()
+    onAdded()
+  }
+
+  const selectedRole = roles.find(r => String(r.id) === String(form.role_id))
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add an admin"
+      description="They sign in with this email and password, and can change it afterwards in Settings."
+      footer={
+        <>
+          <Button onClick={onClose} data-dialog-dismiss="true">Cancel</Button>
+          <Button variant="primary" onClick={submit} busy={saving} busyLabel="Creating…">Create account</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <TextField label="Full name" required value={form.full_name} error={errors.full_name}
+          onChange={e => set('full_name', e.target.value)} placeholder="Sara Belkacem" />
+        <TextField label="Email" type="email" required value={form.email} error={errors.email}
+          onChange={e => set('email', e.target.value)} placeholder="sara@afaq.dz" />
+        <TextField
+          label="Temporary password" type="password" required
+          hint="At least 8 characters. Share it with them directly."
+          value={form.password} error={errors.password}
+          onChange={e => set('password', e.target.value)}
+        />
+        <SelectField label="Role" required value={form.role_id} error={errors.role_id}
+          onChange={e => set('role_id', e.target.value)}>
+          {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </SelectField>
+        {selectedRole?.description && (
+          <p className="text-xs -mt-2" style={{ color: 'var(--adm-silk-faint)' }}>{selectedRole.description}</p>
+        )}
+      </div>
+    </Modal>
   )
 }

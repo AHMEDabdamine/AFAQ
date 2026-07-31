@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import {
   Cpu,
@@ -334,63 +334,6 @@ function PartBlock({
   );
 }
 
-// ─── Datasheet ──────────────────────────────────────────────────────────────
-
-function Datasheet({
-  part,
-  label,
-  details,
-  onClose,
-  closeLabel,
-}: {
-  part: Part;
-  label: string;
-  details: string;
-  onClose: () => void;
-  closeLabel: string;
-}) {
-  const reduced = useReducedMotion();
-
-  return (
-    <motion.div
-      key={part.id}
-      initial={reduced ? false : { opacity: 0, height: 0 }}
-      animate={reduced ? undefined : { opacity: 1, height: "auto" }}
-      exit={reduced ? undefined : { opacity: 0, height: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      style={{ overflow: "hidden" }}
-    >
-      <div className="afaq-datasheet">
-        <div className="afaq-datasheet-rule" aria-hidden="true" />
-        <div className="afaq-datasheet-body">
-          <div className="afaq-datasheet-meta">
-            <span className="afaq-part-icon" aria-hidden="true">
-              {React.cloneElement(part.icon as React.ReactElement, { size: 20 })}
-            </span>
-            <span className="afaq-desig" style={{ color: "var(--color-accent)" }}>
-              {part.designator}
-            </span>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <h3 className="text-xl font-bold" style={{ marginBottom: 6 }}>
-              {label}
-            </h3>
-            <p
-              className="body-text text-sm md:text-base"
-              style={{ color: "var(--color-text-muted)", margin: 0 }}
-            >
-              {details}
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="afaq-close">
-            {closeLabel}
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 // ─── Board (desktop) ────────────────────────────────────────────────────────
 
 function Board({
@@ -620,12 +563,13 @@ export default function ActivitiesDiagram() {
     [t]
   );
 
+  /* Selecting a part lights its trace back to the core and nothing more.
+     There is no expanding write-up any longer — the caption on the block is
+     the whole explanation. */
   const toggle = useCallback(
     (id: string) => setSelected((cur) => (cur === id ? null : id)),
     []
   );
-
-  const openPart = selected ? PARTS.find((p) => p.id === selected) : null;
 
   return (
     <section className="py-16 md:py-20 relative z-0">
@@ -666,18 +610,6 @@ export default function ActivitiesDiagram() {
           selected={selected}
           onSelect={toggle}
         />
-
-        <AnimatePresence initial={false} mode="wait">
-          {openPart && (
-            <Datasheet
-              part={openPart}
-              label={labels[openPart.id]}
-              details={t(`activities.${openPart.key}.details`)}
-              closeLabel={t("activities.close")}
-              onClose={() => setSelected(null)}
-            />
-          )}
-        </AnimatePresence>
       </div>
     </section>
   );

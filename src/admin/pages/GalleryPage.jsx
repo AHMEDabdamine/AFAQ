@@ -1,418 +1,573 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Edit3, Trash2, Upload, ImageIcon, ChevronDown, ChevronUp, Link2, X } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  ChevronDown, Image as ImageIcon, ImageOff, Link2, Loader2, Pencil, Plus, Star, Trash2, Upload, X,
+} from 'lucide-react'
+import { api, deleteUploadedFile, read, run, supabase, uploadFile } from '../lib/db'
 import useAdminStore from '../store/adminStore'
-const getToken = () => useAdminStore.getState().session?.access_token
+import useQueryParam from '../hooks/useQueryParam'
+import { formatDate, plural, toForm } from '../lib/format'
+import PageHeader from '../components/ui/PageHeader'
+import Panel, { PanelHead } from '../components/ui/Panel'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Skeleton from '../components/ui/Skeleton'
-import EmptyState from '../components/ui/EmptyState'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Skeleton, { SkeletonPanel } from '../components/ui/Skeleton'
+import { TextArea, TextField } from '../components/ui/Field'
 
-const spring = { type: 'spring', damping: 22, stiffness: 200 }
+const BLANK = { title_en: '', title_ar: '', title_fr: '', description: '' }
 
 export default function GalleryPage() {
-  const [albums, setAlbums] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [albumModalOpen, setAlbumModalOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
-  const [editing, setEditing] = useState(null)
-  const [expandedId, setExpandedId] = useState(null)
-  const [albumImages, setAlbumImages] = useState({})
-  const [loadingImages, setLoadingImages] = useState({})
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadingFile, setUploadingFile] = useState('')
   const addToast = useAdminStore(s => s.addToast)
 
-  const [form, setForm] = useState({ title_en: '', title_ar: '', title_fr: '', description: '' })
+  const [albums, setAlbums] = useState([])
+  const [imageCounts, setImageCounts] = useState({})
+  const [state, setState] = useState({ loading: true, error: null })
+  const [expanded, setExpanded] = useState(null)
+  const [images, setImages] = useState({})
+  const [loadingImages, setLoadingImages] = useState({})
+  const [upload, setUpload] = useState(null)   // { file, percent, index, total }
+  const [editor, setEditor] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [pendingImage, setPendingImage] = useState(null)
+  const [newFlag, setNewFlag] = useQueryParam('new')
 
-  useEffect(() => { loadAlbums() }, [])
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const [albumRes, countRes] = await Promise.all([
+      read(supabase.from('gallery_albums').select('*').order('created_at', { ascending: false })),
+      // Counting once up front replaces the per-album "…" that never resolved
+      // until you opened the album.
+      read(supabase.from('gallery_images').select('album_id')),
+    ])
 
-  const loadAlbums = async () => {
-    const { data } = await supabase.from('gallery_albums').select('*').order('created_at', { ascending: false })
-    setAlbums(data || [])
-    setLoading(false)
+    if (!albumRes.ok) { setState({ loading: false, error: albumRes.message }); return }
+
+    const tally = {}
+    for (const row of countRes.data || []) tally[row.album_id] = (tally[row.album_id] || 0) + 1
+
+    setAlbums(albumRes.data || [])
+    setImageCounts(tally)
+    setState({ loading: false, error: null })
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (newFlag) { setEditor({ album: null }); setNewFlag('') }
+  }, [newFlag, setNewFlag])
+
+  const loadImages = async albumId => {
+    setLoadingImages(s => ({ ...s, [albumId]: true }))
+    const { data } = await read(
+      supabase.from('gallery_images').select('*').eq('album_id', albumId).order('sort_order')
+    )
+    setImages(s => ({ ...s, [albumId]: data || [] }))
+    setLoadingImages(s => ({ ...s, [albumId]: false }))
   }
 
-  const toggleExpand = async (albumId) => {
-    if (expandedId === albumId) { setExpandedId(null); return }
-    setExpandedId(albumId)
-    if (!albumImages[albumId]) {
-      setLoadingImages(p => ({ ...p, [albumId]: true }))
-      const { data } = await supabase.from('gallery_images').select('*').eq('album_id', albumId).order('sort_order')
-      setAlbumImages(p => ({ ...p, [albumId]: data || [] }))
-      setLoadingImages(p => ({ ...p, [albumId]: false }))
-    }
+  const toggleAlbum = async albumId => {
+    if (expanded === albumId) { setExpanded(null); return }
+    setExpanded(albumId)
+    if (!images[albumId]) await loadImages(albumId)
   }
 
-  const openCreate = () => {
-    setEditing(null)
-    setForm({ title_en: '', title_ar: '', title_fr: '', description: '' })
-    setAlbumModalOpen(true)
-  }
+  const uploadImages = async (albumId, files) => {
+    const list = Array.from(files)
+    if (!list.length) return
 
-  const openEdit = (a) => {
-    setEditing(a)
-    setForm({ title_en: a.title_en || '', title_ar: a.title_ar || '', title_fr: a.title_fr || '', description: a.description || '' })
-    setAlbumModalOpen(true)
-  }
-
-  const handleSave = async () => {
-    if (editing) {
-      await supabase.from('gallery_albums').update(form).eq('id', editing.id)
-      addToast('Album updated')
-    } else {
-      await supabase.from('gallery_albums').insert(form)
-      addToast('Album created')
-    }
-    setAlbumModalOpen(false)
-    loadAlbums()
-  }
-
-  const handleDelete = async () => {
-    const { data: images } = await supabase.from('gallery_images').select('url').eq('album_id', deleteId)
-    if (images) {
-      for (const img of images) {
-    await fetch('/api/upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ url: img.url }) })
+    let uploaded = 0
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i]
+      setUpload({ file: file.name, percent: 0, index: i + 1, total: list.length })
+      try {
+        const url = await uploadFile(file, percent => setUpload(u => (u ? { ...u, percent } : u)))
+        const { ok } = await run(supabase.from('gallery_images').insert({ album_id: albumId, url }))
+        if (ok) uploaded += 1
+        else await deleteUploadedFile(url)   // don't leave an orphan on disk
+      } catch (err) {
+        addToast(`${file.name}: ${err.message}`, 'error')
       }
     }
-    await supabase.from('gallery_albums').delete().eq('id', deleteId)
-    addToast('Album deleted')
-    setDeleteId(null)
-    setAlbumImages(p => { const { [deleteId]: _, ...rest } = p; return rest })
-    loadAlbums()
+
+    setUpload(null)
+    if (uploaded) {
+      addToast(`${plural(uploaded, 'image')} added.`)
+      await loadImages(albumId)
+      setImageCounts(c => ({ ...c, [albumId]: (c[albumId] || 0) + uploaded }))
+    }
   }
 
-  const uploadFile = (file) => new Promise((resolve, reject) => {
-    const fd = new FormData()
-    fd.append('file', file)
-    const xhr = new XMLHttpRequest()
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        setUploadProgress(Math.round((e.loaded / e.total) * 100))
-      }
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(JSON.parse(xhr.responseText))
-      } else {
-        reject(new Error(`Upload failed: ${xhr.status}`))
-      }
-    }
-    xhr.onerror = () => reject(new Error('Network error'))
-    xhr.open('POST', '/api/upload')
-    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`)
-    xhr.send(fd)
-  })
+  const removeImage = async () => {
+    const { image, albumId } = pendingImage
+    const { ok } = await run(
+      supabase.from('gallery_images').delete().eq('id', image.id),
+      { success: 'Image removed.', failure: 'The image was not removed.' }
+    )
+    if (!ok) return
 
-  const handleUpload = async (e) => {
-    const files = Array.from(e.target.files)
-    if (!files.length) return
-    setUploading(true)
-    setUploadProgress(0)
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      setUploadingFile(file.name)
-      const { url } = await uploadFile(file)
-      await supabase.from('gallery_images').insert({ album_id: expandedId, url })
-      setUploadProgress(Math.round(((i + 1) / files.length) * 100))
-    }
-    setUploading(false)
-    setUploadingFile('')
-    addToast(`${files.length} image(s) uploaded`)
-    const { data } = await supabase.from('gallery_images').select('*').eq('album_id', expandedId).order('sort_order')
-    setAlbumImages(p => ({ ...p, [expandedId]: data || [] }))
+    await deleteUploadedFile(image.url)
+    setPendingImage(null)
+    setImages(s => ({ ...s, [albumId]: (s[albumId] || []).filter(i => i.id !== image.id) }))
+    setImageCounts(c => ({ ...c, [albumId]: Math.max(0, (c[albumId] || 1) - 1) }))
   }
 
-  const deleteImage = async (img) => {
-    await fetch('/api/upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ url: img.url }) })
-    await supabase.from('gallery_images').delete().eq('id', img.id)
-    const { data } = await supabase.from('gallery_images').select('*').eq('album_id', expandedId).order('sort_order')
-    setAlbumImages(p => ({ ...p, [expandedId]: data || [] }))
+  const setCover = async (album, url) => {
+    const { ok } = await run(
+      supabase.from('gallery_albums').update({ cover_url: url }).eq('id', album.id),
+      { success: 'Album cover updated.', failure: 'The cover did not change.' }
+    )
+    if (ok) setAlbums(list => list.map(a => (a.id === album.id ? { ...a, cover_url: url } : a)))
   }
 
-  if (loading) return <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} style={{ height: 200 }} />)}</div>
+  const removeAlbum = async () => {
+    const album = pendingDelete
+    const { data: albumImages } = await read(
+      supabase.from('gallery_images').select('url').eq('album_id', album.id)
+    )
+
+    const { ok } = await run(
+      supabase.from('gallery_albums').delete().eq('id', album.id),
+      { success: `“${album.title_en}” deleted.`, failure: 'The album was not deleted.' }
+    )
+    if (!ok) return
+
+    // Rows cascade; the files on disk do not, so clear them too.
+    await Promise.all((albumImages || []).map(i => deleteUploadedFile(i.url)))
+    setPendingDelete(null)
+    setExpanded(null)
+    load()
+  }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      {/* Who We Are Image Manager */}
-      <AboutImageManager />
+    <div>
+      <PageHeader
+        eyebrow="Publish"
+        title="Gallery"
+        description="Photo albums from club events and workshops, plus the image on the homepage intro."
+        actions={<Button variant="primary" icon={Plus} onClick={() => setEditor({ album: null })}>New album</Button>}
+      />
 
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Manage gallery albums</p>
-        <button onClick={openCreate} className="admin-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-          <Plus size={16} /> New Album
-        </button>
-      </div>
+      <HomeIntroImage addToast={addToast} />
 
-      {albums.length === 0 ? (
-        <EmptyState icon={ImageIcon} title="No albums yet" description="Create your first album" action={
-          <button onClick={openCreate} className="admin-btn-primary mt-4 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>Create Album</button>
-        } />
+      <h2 className="text-[15px] mt-6 mb-3">Albums</h2>
+
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
+      ) : state.loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonPanel key={i} rows={1} />)}
+        </div>
+      ) : albums.length === 0 ? (
+        <Panel>
+          <EmptyState
+            icon={ImageIcon}
+            title="No albums yet"
+            description="Create an album for an event, then upload the photos into it."
+            action={<Button variant="primary" icon={Plus} onClick={() => setEditor({ album: null })}>New album</Button>}
+          />
+        </Panel>
       ) : (
-        <div className="space-y-5">
-          {albums.map((album, idx) => {
-            const isOpen = expandedId === album.id
-            const images = albumImages[album.id] || []
-            const imageCount = albumImages[album.id] ? images.length : '...'
+        <div className="space-y-3">
+          {albums.map(album => {
+            const isOpen = expanded === album.id
+            const count = imageCounts[album.id] || 0
+            const albumImages = images[album.id] || []
 
             return (
-              <motion.div
-                key={album.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.04 }}
-                className="rounded-2xl border overflow-hidden"
-                style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}
-              >
-                {/* Album Header */}
-                <div
-                  onClick={() => toggleExpand(album.id)}
-                  className="flex items-center justify-between p-4 cursor-pointer transition-all hover:bg-black/[0.02]"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl" style={{ background: 'var(--color-bg-alt)' }}>
-                      <ImageIcon size={16} style={{ color: 'var(--color-accent)' }} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{album.title_en}</h3>
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        {album.description || 'No description'} &middot; {imageCount} image(s)
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={(e) => { e.stopPropagation(); openEdit(album) }} className="admin-icon-btn p-2 rounded-xl" style={{ color: 'var(--color-text-muted)' }}><Edit3 size={14} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); setDeleteId(album.id) }} className="admin-icon-btn p-2 rounded-xl" style={{ color: '#dc2626' }}><Trash2 size={14} /></button>
-                    {isOpen ? <ChevronUp size={18} style={{ color: 'var(--color-text-muted)' }} /> : <ChevronDown size={18} style={{ color: 'var(--color-text-muted)' }} />}
+              <Panel key={album.id} className="overflow-hidden">
+                <div className="flex items-center gap-3 p-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleAlbum(album.id)}
+                    aria-expanded={isOpen}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    {album.cover_url ? (
+                      <img
+                        src={album.cover_url}
+                        alt=""
+                        className="rounded-lg object-cover shrink-0"
+                        style={{ width: 44, height: 44, border: '1px solid var(--adm-trace)' }}
+                      />
+                    ) : (
+                      <span
+                        className="flex items-center justify-center rounded-lg shrink-0"
+                        style={{ width: 44, height: 44, background: 'var(--adm-board-sunk)', color: 'var(--adm-silk-faint)' }}
+                        aria-hidden="true"
+                      >
+                        <ImageOff size={16} />
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold adm-truncate">{album.title_en}</span>
+                      <span className="block text-xs adm-truncate" style={{ color: 'var(--adm-silk-faint)' }}>
+                        {plural(count, 'photo')} · added {formatDate(album.created_at)}
+                        {album.description ? ` · ${album.description}` : ''}
+                      </span>
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <IconButton icon={Pencil} label="Rename album" onClick={() => setEditor({ album })} />
+                    <IconButton icon={Trash2} label="Delete album" danger onClick={() => setPendingDelete(album)} />
+                    <button
+                      type="button"
+                      onClick={() => toggleAlbum(album.id)}
+                      className="adm-icon-btn"
+                      aria-label={isOpen ? 'Hide photos' : 'Show photos'}
+                    >
+                      <ChevronDown
+                        size={17}
+                        style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .18s ease' }}
+                      />
+                    </button>
                   </div>
                 </div>
 
-                {/* Expanded Image Grid */}
-                <AnimatePresence>
+                <AnimatePresence initial={false}>
                   {isOpen && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={spring}
-                      className="overflow-hidden"
+                      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                      style={{ overflow: 'hidden' }}
                     >
-                      <div className="px-4 pb-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
-                        {/* Upload bar */}
-                        {uploading ? (
-                          <div className="mt-4 p-4 rounded-xl border-2" style={{ borderColor: 'var(--color-border)' }}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Upload size={16} className="animate-pulse" style={{ color: 'var(--color-accent)' }} />
-                              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Uploading {uploadingFile}</span>
-                              <span className="text-xs ml-auto" style={{ color: 'var(--color-text-muted)' }}>{uploadProgress}%</span>
+                      <div className="px-4 pb-4 pt-4" style={{ borderTop: '1px solid var(--adm-trace)' }}>
+                        {upload ? (
+                          <div className="p-4 rounded-xl" style={{ border: '1px solid var(--adm-trace)' }}>
+                            <div className="flex items-center gap-2 mb-2.5">
+                              <Loader2 size={15} className="adm-spin" style={{ color: 'var(--adm-signal)' }} />
+                              <span className="text-sm adm-truncate flex-1">{upload.file}</span>
+                              <span className="adm-data text-xs" style={{ color: 'var(--adm-silk-faint)' }}>
+                                {upload.index} of {upload.total} · {upload.percent}%
+                              </span>
                             </div>
-                            <div className="w-full h-2 rounded-full" style={{ background: 'var(--color-bg-alt)' }}>
-                              <motion.div
-                                className="h-full rounded-full"
-                                style={{ background: 'var(--color-accent)', width: `${uploadProgress}%` }}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${uploadProgress}%` }}
-                                transition={{ duration: 0.3 }}
+                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--adm-board-sunk)' }}>
+                              <div
+                                style={{
+                                  width: `${upload.percent}%`, height: '100%',
+                                  background: 'var(--adm-signal)', transition: 'width .2s ease',
+                                }}
                               />
                             </div>
                           </div>
                         ) : (
-                          <label className="admin-btn flex items-center justify-center gap-2 mt-4 p-4 rounded-xl border-2 border-dashed cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+                          <label
+                            className="flex items-center justify-center gap-2 p-5 rounded-xl cursor-pointer text-sm"
+                            style={{
+                              border: '1.5px dashed var(--adm-trace-strong)',
+                              color: 'var(--adm-silk-dim)',
+                            }}
+                          >
                             <Upload size={16} />
-                            <span className="text-sm">Click to upload images</span>
-                            <input type="file" multiple accept="image/*" onChange={handleUpload} className="hidden" />
+                            Add photos to this album
+                            <input
+                              type="file" multiple accept="image/*" className="sr-only"
+                              onChange={e => { uploadImages(album.id, e.target.files); e.target.value = '' }}
+                            />
                           </label>
                         )}
 
-                        {/* Image grid */}
                         {loadingImages[album.id] ? (
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mt-4">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                              <Skeleton key={i} style={{ aspectRatio: '1', borderRadius: 12 }} />
+                          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2.5 mt-4">
+                            {Array.from({ length: 7 }).map((_, i) => (
+                              <Skeleton key={i} style={{ aspectRatio: '1', height: 'auto', borderRadius: 10 }} />
                             ))}
                           </div>
-                        ) : images.length === 0 ? (
-                          <p className="text-sm text-center py-8" style={{ color: 'var(--color-text-muted)' }}>No images in this album yet</p>
+                        ) : albumImages.length === 0 ? (
+                          <p className="text-sm text-center py-8" style={{ color: 'var(--adm-silk-faint)' }}>
+                            This album is empty. Add photos above.
+                          </p>
                         ) : (
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mt-4">
-                            {images.map((img, i) => (
-                              <motion.div
-                                key={img.id}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: i * 0.03 }}
-                                className="relative group rounded-xl overflow-hidden border"
-                                style={{ borderColor: 'var(--color-border-light)', aspectRatio: '1' }}
-                              >
-                                <img src={img.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                                  <button
-                                    onClick={() => deleteImage(img)}
-                                    className="p-2 rounded-lg bg-white/90 text-red-600 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
+                          <ul className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2.5 mt-4">
+                            {albumImages.map(image => {
+                              const isCover = album.cover_url === image.url
+                              return (
+                                <li
+                                  key={image.id}
+                                  className="relative group rounded-lg overflow-hidden"
+                                  style={{ aspectRatio: '1', border: '1px solid var(--adm-trace)' }}
+                                >
+                                  <img src={image.url} alt={image.alt_text || ''} className="w-full h-full object-cover" loading="lazy" />
+                                  <div
+                                    className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                                    style={{ background: 'rgba(6,10,16,0.55)' }}
                                   >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCover(album, image.url)}
+                                      className="p-1.5 rounded-md"
+                                      style={{ background: 'rgba(255,255,255,0.92)', color: isCover ? '#c97a04' : '#0a1220' }}
+                                      aria-label={isCover ? 'This is the album cover' : 'Use as album cover'}
+                                      title={isCover ? 'Album cover' : 'Use as album cover'}
+                                    >
+                                      <Star size={13} fill={isCover ? 'currentColor' : 'none'} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingImage({ image, albumId: album.id })}
+                                      className="p-1.5 rounded-md"
+                                      style={{ background: 'rgba(255,255,255,0.92)', color: '#d8402f' }}
+                                      aria-label="Delete photo"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                  {isCover && (
+                                    <span
+                                      className="absolute top-1 left-1 px-1.5 rounded text-[9px] adm-pixel uppercase tracking-wider"
+                                      style={{ background: 'rgba(6,10,16,0.7)', color: '#fff' }}
+                                    >
+                                      Cover
+                                    </span>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
                         )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </Panel>
             )
           })}
         </div>
       )}
 
-      {/* Album CRUD Modal */}
-      <Modal open={albumModalOpen} onClose={() => setAlbumModalOpen(false)} title={editing ? 'Edit Album' : 'Create Album'}>
-        <div className="space-y-4">
-          {['en', 'ar', 'fr'].map(lang => (
-            <div key={lang}>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Title ({lang.toUpperCase()})</label>
-              <input value={form[`title_${lang}`]} onChange={e => setForm({...form, [`title_${lang}`]: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-            </div>
-          ))}
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Description</label>
-            <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} rows={2} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
-            <button onClick={() => setAlbumModalOpen(false)} className="admin-btn px-4 py-2 rounded-xl text-sm font-medium border" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>Cancel</button>
-            <button onClick={handleSave} className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>{editing ? 'Update' : 'Create'}</button>
-          </div>
-        </div>
-      </Modal>
+      <AlbumEditor
+        key={editor?.album?.id || 'new'}
+        open={!!editor}
+        album={editor?.album}
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); load() }}
+      />
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Album" message="This will delete the album and all its images permanently." />
-    </motion.div>
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={removeAlbum}
+        title="Delete this album?"
+        message={
+          pendingDelete
+            ? `“${pendingDelete.title_en}” and its ${plural(imageCounts[pendingDelete.id] || 0, 'photo')} will be deleted permanently.`
+            : ''
+        }
+        confirmLabel="Delete album"
+      />
+
+      <ConfirmDialog
+        open={!!pendingImage}
+        onClose={() => setPendingImage(null)}
+        onConfirm={removeImage}
+        title="Delete this photo?"
+        message="The photo will be removed from the album and deleted from the server."
+        confirmLabel="Delete photo"
+      />
+    </div>
   )
 }
 
-function AboutImageManager() {
-  const [aboutImage, setAboutImage] = useState(null)
+function AlbumEditor({ open, album, onClose, onSaved }) {
+  const [form, setForm] = useState(BLANK)
+  const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
-  const [urlInput, setUrlInput] = useState('')
-  const [showUrlInput, setShowUrlInput] = useState(false)
-  const addToast = useAdminStore(s => s.addToast)
+
+  useEffect(() => {
+    if (!open) return
+    setForm(album ? toForm(BLANK, album) : BLANK)
+    setErrors({})
+  }, [open, album])
+
+  const set = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  const save = async () => {
+    if (!form.title_en.trim()) {
+      setErrors({ title_en: 'An English title is required — it is what the site shows.' })
+      return
+    }
+
+    setSaving(true)
+    const payload = {
+      title_en: form.title_en.trim(),
+      title_ar: form.title_ar?.trim() || null,
+      title_fr: form.title_fr?.trim() || null,
+      description: form.description?.trim() || null,
+    }
+    const { ok } = await run(
+      album
+        ? supabase.from('gallery_albums').update(payload).eq('id', album.id)
+        : supabase.from('gallery_albums').insert(payload),
+      {
+        success: album ? 'Album updated.' : `“${payload.title_en}” created.`,
+        failure: 'The album did not save.',
+      }
+    )
+    setSaving(false)
+    if (ok) onSaved()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={album ? 'Edit album' : 'New album'}
+      description="Name the album after the event it covers."
+      footer={
+        <>
+          <Button onClick={onClose} data-dialog-dismiss="true">Cancel</Button>
+          <Button variant="primary" onClick={save} busy={saving} busyLabel="Saving…">
+            {album ? 'Save changes' : 'Create album'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <TextField
+          label="Title (English)" required
+          value={form.title_en} error={errors.title_en}
+          onChange={e => set('title_en', e.target.value)}
+          placeholder="Robotics Day 2026"
+        />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <TextField label="Title (Arabic)" dir="rtl" value={form.title_ar || ''} onChange={e => set('title_ar', e.target.value)} />
+          <TextField label="Title (French)" value={form.title_fr || ''} onChange={e => set('title_fr', e.target.value)} />
+        </div>
+        <TextArea
+          label="Description" rows={2}
+          value={form.description || ''}
+          onChange={e => set('description', e.target.value)}
+          placeholder="One line about what these photos show."
+        />
+      </div>
+    </Modal>
+  )
+}
+
+/** The single image on the homepage intro block. */
+function HomeIntroImage({ addToast }) {
+  const [image, setImage] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [url, setUrl] = useState('')
+  const [showUrl, setShowUrl] = useState(false)
 
   useEffect(() => {
     fetch('/api/page-content/home_intro')
       .then(r => r.json())
-      .then(({ image_url }) => { if (image_url) setAboutImage(image_url) })
+      .then(({ image_url }) => setImage(image_url || null))
       .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
-  const saveImage = async (image_url) => {
+  const save = async next => {
     setSaving(true)
-    try {
-      const res = await fetch('/api/page-content', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ section: 'home_intro', image_url }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Save failed')
-      setAboutImage(image_url)
-      setUrlInput('')
-      setShowUrlInput(false)
-      addToast('About image updated')
-    } catch (e) {
-      console.error('Save error:', e)
-      addToast('Failed to save: ' + e.message)
-    }
+    const { ok, message } = await api('/api/page-content', {
+      method: 'PUT',
+      body: { section: 'home_intro', image_url: next },
+    })
     setSaving(false)
+    if (!ok) { addToast(message, 'error'); return }
+    setImage(next)
+    setUrl('')
+    setShowUrl(false)
+    addToast(next ? 'Homepage image updated.' : 'Homepage image removed.')
   }
 
-  const removeImage = async () => {
-    setSaving(true)
-    try {
-      const res = await fetch('/api/page-content', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ section: 'home_intro', image_url: null }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Remove failed')
-      setAboutImage(null)
-      addToast('About image removed')
-    } catch (e) {
-      console.error('Remove error:', e)
-      addToast('Failed to remove')
-    }
-    setSaving(false)
-  }
-
-  const handleUpload = (e) => {
-    const file = e.target.files?.[0]
+  const upload = async file => {
     if (!file) return
     setSaving(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    const xhr = new XMLHttpRequest()
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const { url } = JSON.parse(xhr.responseText)
-        saveImage(url)
-      } else {
-        addToast('Upload failed: ' + xhr.responseText)
-        setSaving(false)
-      }
+    try {
+      const uploadedUrl = await uploadFile(file)
+      await save(uploadedUrl)
+    } catch (err) {
+      addToast(err.message, 'error')
+      setSaving(false)
     }
-    xhr.onerror = () => { addToast('Upload failed: Network error'); setSaving(false) }
-    xhr.open('POST', '/api/upload')
-    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`)
-    xhr.send(fd)
   }
 
   return (
-    <div className="rounded-2xl border p-5" style={{ background: 'var(--color-card)', borderColor: 'var(--color-border-light)' }}>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Who Are We Image</h3>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Hero image shown on the homepage intro section</p>
+    <Panel>
+      <PanelHead
+        eyebrow="Homepage"
+        title="“Who are we” image"
+        description="The photo beside the intro text on the homepage."
+      />
+      <div className="p-5">
+        <div className="flex flex-col sm:flex-row gap-5">
+          <div
+            className="rounded-xl overflow-hidden shrink-0 relative"
+            style={{ width: 'min(100%, 300px)', aspectRatio: '21/9', border: '1px solid var(--adm-trace)' }}
+          >
+            {loading ? (
+              <Skeleton style={{ width: '100%', height: '100%', borderRadius: 0 }} />
+            ) : image ? (
+              <>
+                <img src={image} alt="Homepage intro" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => save(null)}
+                  disabled={saving}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg"
+                  style={{ background: 'rgba(6,10,16,0.6)', color: '#fff' }}
+                  aria-label="Remove homepage image"
+                >
+                  <X size={14} />
+                </button>
+              </>
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center text-xs"
+                style={{ background: 'var(--adm-board-sunk)', color: 'var(--adm-silk-faint)' }}
+              >
+                No image set
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-2">
+              <label className="adm-btn" style={{ cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? <Loader2 size={15} className="adm-spin" /> : <Upload size={15} />}
+                {saving ? 'Working…' : 'Upload image'}
+                <input
+                  type="file" accept="image/*" className="sr-only" disabled={saving}
+                  onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
+              <Button icon={Link2} onClick={() => setShowUrl(s => !s)}>
+                {showUrl ? 'Cancel' : 'Use a link'}
+              </Button>
+            </div>
+
+            {showUrl && (
+              <div className="flex gap-2 mt-3">
+                <input
+                  className="adm-input"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  placeholder="https://…"
+                  aria-label="Image URL"
+                />
+                <Button variant="primary" onClick={() => save(url.trim())} disabled={!url.trim()} busy={saving} busyLabel="Saving…">
+                  Save
+                </Button>
+              </div>
+            )}
+
+            <p className="text-xs mt-3" style={{ color: 'var(--adm-silk-faint)' }}>
+              A wide photo works best — it is cropped to roughly 21:9.
+            </p>
+          </div>
         </div>
       </div>
-
-      {aboutImage ? (
-        <div className="relative rounded-xl overflow-hidden border mb-3" style={{ borderColor: 'var(--color-border-light)', aspectRatio: '21/9', maxWidth: 600 }}>
-          <img src={aboutImage} alt="" className="w-full h-full object-cover" />
-          <button onClick={removeImage} disabled={saving} className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white/80 hover:bg-black/80 transition-all" title="Remove image"><X size={14} /></button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-center rounded-xl border-2 border-dashed mb-3" style={{ borderColor: 'var(--color-border)', aspectRatio: '21/9', maxWidth: 600 }}>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>No image set</p>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <label className="admin-btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-white cursor-pointer" style={{ background: 'var(--color-accent)' }}>
-          <Upload size={14} /> Upload
-          <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        </label>
-        <button onClick={() => setShowUrlInput(!showUrlInput)} className="admin-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>
-          <Link2 size={14} /> {showUrlInput ? 'Cancel' : 'URL'}
-        </button>
-      </div>
-
-      {showUrlInput && (
-        <div className="flex items-center gap-2 mt-3">
-          <input
-            value={urlInput}
-            onChange={e => setUrlInput(e.target.value)}
-            placeholder="Paste image URL..."
-            className="flex-1 px-3 py-1.5 rounded-xl border text-xs"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}
-          />
-          <button onClick={() => saveImage(urlInput)} disabled={saving || !urlInput.trim()} className="admin-btn-primary px-3 py-1.5 rounded-xl text-xs font-medium text-white" style={{ background: saving ? 'var(--color-text-muted)' : 'var(--color-accent)' }}>
-            {saving ? 'Saving...' : 'Save URL'}
-          </button>
-        </div>
-      )}
-
-    </div>
+    </Panel>
   )
 }

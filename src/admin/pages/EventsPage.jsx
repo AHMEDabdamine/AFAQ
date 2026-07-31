@@ -1,224 +1,493 @@
-import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Edit3, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Upload } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  CalendarPlus, Copy, Eye, EyeOff, ImageOff, Loader2, Pencil, ToggleLeft, ToggleRight, Trash2, Upload, Users,
+} from 'lucide-react'
+import { deleteUploadedFile, logActivity, read, run, supabase, uploadFile } from '../lib/db'
 import useAdminStore from '../store/adminStore'
+import useQueryParam from '../hooks/useQueryParam'
+import { formatDate, isPast, toDateInput, toForm } from '../lib/format'
+import PageHeader, { FilterTabs } from '../components/ui/PageHeader'
 import DataTable from '../components/ui/DataTable'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Skeleton from '../components/ui/Skeleton'
-import EmptyState from '../components/ui/EmptyState'
+import EmptyState, { ErrorState } from '../components/ui/EmptyState'
+import Button, { IconButton } from '../components/ui/Button'
+import Badge, { StatusBadge } from '../components/ui/Badge'
+import Panel from '../components/ui/Panel'
+import { CheckField, LocalizedField, TextField } from '../components/ui/Field'
+
+const BLANK = {
+  title_en: '', title_ar: '', title_fr: '',
+  description_en: '', description_ar: '', description_fr: '',
+  location_en: '', location_ar: '', location_fr: '',
+  date: '', time: '', poster_url: '', max_participants: 0,
+  registration_open: false, is_published: false,
+}
+
+const FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'past', label: 'Past' },
+  { value: 'draft', label: 'Drafts' },
+]
 
 export default function EventsPage() {
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
-  const [editing, setEditing] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const adminProfile = useAdminStore(s => s.adminProfile)
   const addToast = useAdminStore(s => s.addToast)
+  const adminProfile = useAdminStore(s => s.adminProfile)
 
-  const [form, setForm] = useState({
-    title_en: '', title_ar: '', title_fr: '',
-    description_en: '', description_ar: '', description_fr: '',
-    date: '', time: '',
-    location_en: '', location_ar: '', location_fr: '',
-    poster_url: '', max_participants: 0, registration_open: false, is_published: false,
-  })
+  const [events, setEvents] = useState([])
+  const [seats, setSeats] = useState({})
+  const [state, setState] = useState({ loading: true, error: null })
+  const [status, setStatus] = useQueryParam('status', 'all')
+  const [search] = useQueryParam('q')
+  const [newFlag, setNewFlag] = useQueryParam('new')
 
-  const loadEvents = useCallback(async () => {
-    const { data } = await supabase.from('events').select('*').order('date', { ascending: false })
-    setEvents(data || [])
-    setLoading(false)
+  const [editor, setEditor] = useState(null)   // { event | null }
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [working, setWorking] = useState({})
+
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, error: null }))
+    const [list, regs] = await Promise.all([
+      read(supabase.from('events').select('*').order('date', { ascending: false })),
+      read(supabase.from('event_registrations').select('event_id, status')),
+    ])
+
+    if (!list.ok) {
+      setState({ loading: false, error: list.message })
+      return
+    }
+
+    const tally = {}
+    for (const row of regs.data || []) {
+      const bucket = tally[row.event_id] || (tally[row.event_id] = { total: 0, approved: 0 })
+      bucket.total += 1
+      if (row.status === 'approved') bucket.approved += 1
+    }
+
+    setEvents(list.data || [])
+    setSeats(tally)
+    setState({ loading: false, error: null })
   }, [])
 
-  useEffect(() => { loadEvents() }, [loadEvents])
+  useEffect(() => { load() }, [load])
 
-  const openCreate = () => {
-    setEditing(null)
-    setForm({ title_en: '', title_ar: '', title_fr: '', description_en: '', description_ar: '', description_fr: '', date: '', time: '', location_en: '', location_ar: '', location_fr: '', poster_url: '', max_participants: 0, registration_open: false, is_published: false })
-    setModalOpen(true)
-  }
+  // Quick actions on the dashboard link straight into the create form.
+  useEffect(() => {
+    if (newFlag) { setEditor({ event: null }); setNewFlag('') }
+  }, [newFlag, setNewFlag])
 
-  const openEdit = (ev) => {
-    setEditing(ev)
-    setForm({
-      title_en: ev.title_en || '', title_ar: ev.title_ar || '', title_fr: ev.title_fr || '',
-      description_en: ev.description_en || '', description_ar: ev.description_ar || '', description_fr: ev.description_fr || '',
-      date: ev.date || '', time: ev.time || '',
-      location_en: ev.location_en || '', location_ar: ev.location_ar || '', location_fr: ev.location_fr || '',
-      poster_url: ev.poster_url || '',
-      max_participants: ev.max_participants || 0,
-      registration_open: ev.registration_open || false,
-      is_published: ev.is_published || false,
-    })
-    setModalOpen(true)
-  }
+  const filtered = useMemo(() => {
+    if (status === 'draft') return events.filter(e => !e.is_published)
+    if (status === 'past') return events.filter(e => isPast(e.date))
+    if (status === 'upcoming') return events.filter(e => !isPast(e.date))
+    return events
+  }, [events, status])
 
-  const handleSave = async () => {
-    setSaving(true)
-    const payload = { ...form, created_by: adminProfile?.user_id }
-    if (editing) {
-      await supabase.from('events').update(payload).eq('id', editing.id)
-      addToast('Event updated')
-    } else {
-      await supabase.from('events').insert(payload)
-      addToast('Event created')
+  const filterOptions = FILTERS.map(f => ({
+    ...f,
+    count: f.value === 'all' ? events.length
+      : f.value === 'draft' ? events.filter(e => !e.is_published).length
+        : f.value === 'past' ? events.filter(e => isPast(e.date)).length
+          : events.filter(e => !isPast(e.date)).length,
+  }))
+
+  const mark = (id, busy) => setWorking(w => ({ ...w, [id]: busy }))
+
+  const toggleField = async (event, field, labels) => {
+    mark(event.id, true)
+    const next = !event[field]
+    const { ok } = await run(
+      supabase.from('events').update({ [field]: next }).eq('id', event.id),
+      { success: next ? labels.on : labels.off, failure: 'That switch did not change.' }
+    )
+    mark(event.id, false)
+    if (ok) {
+      setEvents(list => list.map(e => (e.id === event.id ? { ...e, [field]: next } : e)))
+      if (field === 'is_published') {
+        logActivity(next ? 'published' : 'unpublished', 'events', event.id, { name: event.title_en })
+      }
     }
-    setSaving(false)
-    setModalOpen(false)
-    loadEvents()
   }
 
-  const handleDelete = async () => {
-    await supabase.from('events').delete().eq('id', deleteId)
-    addToast('Event deleted')
-    setDeleteId(null)
-    loadEvents()
+  const duplicate = async event => {
+    const { id, created_at, updated_at, ...rest } = event
+    const { ok } = await run(
+      supabase.from('events').insert({
+        ...rest,
+        title_en: `${event.title_en} (copy)`,
+        is_published: false,
+        registration_open: false,
+        created_by: adminProfile?.user_id,
+      }),
+      { success: 'Copied as an unpublished draft.', failure: 'The copy was not created.' }
+    )
+    if (ok) load()
   }
 
-  const togglePublish = async (ev) => {
-    await supabase.from('events').update({ is_published: !ev.is_published }).eq('id', ev.id)
-    loadEvents()
+  const remove = async () => {
+    const event = pendingDelete
+    const { ok } = await run(
+      supabase.from('events').delete().eq('id', event.id),
+      { success: `“${event.title_en}” deleted.`, failure: 'The event was not deleted.' }
+    )
+    if (ok) {
+      logActivity('deleted', 'events', event.id, { name: event.title_en })
+      if (event.poster_url) deleteUploadedFile(event.poster_url)
+      setPendingDelete(null)
+      load()
+    }
   }
 
-  const toggleRegistration = async (ev) => {
-    await supabase.from('events').update({ registration_open: !ev.registration_open }).eq('id', ev.id)
-    loadEvents()
-  }
-
-  const columns = [
-    { header: 'Title', accessorKey: 'title_en', cell: ({ row }) => (
-      <span className="font-medium">{row.original.title_en}</span>
-    )},
-    { header: 'Date', accessorKey: 'date' },
-    { header: 'Seats', accessorKey: 'max_participants' },
-    { header: 'Registration', accessorKey: 'registration_open', cell: ({ row }) => (
-      row.original.registration_open
-        ? <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#16a34a20', color: '#16a34a' }}>Open</span>
-        : <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#dc262620', color: '#dc2626' }}>Closed</span>
-    )},
-    { header: 'Status', accessorKey: 'is_published', cell: ({ row }) => (
-      row.original.is_published
-        ? <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#2460e720', color: '#2460e7' }}>Published</span>
-        : <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: '#d9770620', color: '#d97706' }}>Draft</span>
-    )},
-    { header: '', id: 'actions', cell: ({ row }) => (
-      <div className="flex gap-1">
-        <button onClick={() => openEdit(row.original)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}><Edit3 size={14} /></button>
-        <button onClick={() => togglePublish(row.original)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}>{row.original.is_published ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-        <button onClick={() => toggleRegistration(row.original)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)' }}>{row.original.registration_open ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}</button>
-        <button onClick={() => setDeleteId(row.original.id)} className="admin-icon-btn p-1.5 rounded-lg" style={{ color: '#dc2626' }}><Trash2 size={14} /></button>
-      </div>
-    )},
-  ]
-
-  if (loading) return <div className="space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} style={{ height: 48 }} />)}</div>
+  const columns = useMemo(() => [
+    {
+      header: 'Event',
+      accessorKey: 'title_en',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3 min-w-0">
+          {row.original.poster_url ? (
+            <img
+              src={row.original.poster_url}
+              alt=""
+              className="rounded-md object-cover shrink-0"
+              style={{ width: 34, height: 34, border: '1px solid var(--adm-trace)' }}
+            />
+          ) : (
+            <span
+              className="flex items-center justify-center rounded-md shrink-0"
+              style={{ width: 34, height: 34, background: 'var(--adm-board-sunk)', color: 'var(--adm-silk-faint)' }}
+              aria-hidden="true"
+            >
+              <ImageOff size={14} />
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold adm-truncate" style={{ maxWidth: 260 }}>
+              {row.original.title_en}
+            </span>
+            <span className="adm-data block text-[11px]" style={{ color: 'var(--adm-silk-faint)' }}>
+              {formatDate(row.original.date)}
+              {row.original.time ? ` · ${row.original.time.slice(0, 5)}` : ''}
+            </span>
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Seats',
+      id: 'seats',
+      accessorFn: row => seats[row.id]?.approved || 0,
+      cell: ({ row }) => {
+        const taken = seats[row.original.id]?.approved || 0
+        const pending = (seats[row.original.id]?.total || 0) - taken
+        const capacity = row.original.max_participants || 0
+        return (
+          <span className="adm-data text-[13px]">
+            {capacity ? `${taken}/${capacity}` : taken || '—'}
+            {pending > 0 && (
+              <span className="ml-1.5" style={{ color: 'var(--adm-wait)' }}>+{pending} pending</span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      header: 'Registration',
+      accessorKey: 'registration_open',
+      cell: ({ row }) => <StatusBadge status={row.original.registration_open ? 'open' : 'closed'} />,
+    },
+    {
+      header: 'Visibility',
+      accessorKey: 'is_published',
+      cell: ({ row }) => <StatusBadge status={row.original.is_published ? 'published' : 'draft'} />,
+    },
+    {
+      header: '',
+      id: 'actions',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const event = row.original
+        const busy = working[event.id]
+        return (
+          <div className="flex items-center justify-end gap-0.5" onClick={e => e.stopPropagation()}>
+            {busy && <Loader2 size={14} className="adm-spin mr-1" style={{ color: 'var(--adm-silk-faint)' }} />}
+            <IconButton
+              icon={event.is_published ? EyeOff : Eye}
+              label={event.is_published ? 'Unpublish' : 'Publish'}
+              disabled={busy}
+              onClick={() => toggleField(event, 'is_published', {
+                on: `“${event.title_en}” is live on the site.`,
+                off: `“${event.title_en}” is hidden from the site.`,
+              })}
+            />
+            <IconButton
+              icon={event.registration_open ? ToggleRight : ToggleLeft}
+              label={event.registration_open ? 'Close registration' : 'Open registration'}
+              disabled={busy}
+              onClick={() => toggleField(event, 'registration_open', {
+                on: 'Registration is open.',
+                off: 'Registration is closed.',
+              })}
+            />
+            <IconButton icon={Copy} label="Duplicate" onClick={() => duplicate(event)} />
+            <IconButton icon={Pencil} label="Edit" onClick={() => setEditor({ event })} />
+            <IconButton icon={Trash2} label="Delete" danger onClick={() => setPendingDelete(event)} />
+          </div>
+        )
+      },
+    },
+  ], [seats, working]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Manage club events</p>
-        <button
-          onClick={openCreate}
-          className="admin-btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
-          style={{ background: 'var(--color-accent)' }}
-        >
-          <Plus size={16} /> New Event
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        eyebrow="Operate"
+        title="Events"
+        description="Workshops, talks and competitions. Publishing puts an event on the public site; opening registration lets people sign up."
+        actions={<Button variant="primary" icon={CalendarPlus} onClick={() => setEditor({ event: null })}>New event</Button>}
+      />
 
-      {events.length === 0 ? (
-        <EmptyState icon={Eye} title="No events yet" description="Create your first event to get started" action={
-          <button onClick={openCreate} className="admin-btn-primary mt-4 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>Create Event</button>
-        } />
+      {state.error ? (
+        <Panel><ErrorState message={state.error} onRetry={load} /></Panel>
       ) : (
-        <DataTable columns={columns} data={events} searchPlaceholder="Search events..." />
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={state.loading}
+          initialSearch={search}
+          getRowId={row => String(row.id)}
+          onRowClick={event => setEditor({ event })}
+          searchPlaceholder="Search events…"
+          initialSort={[{ id: 'title_en', desc: false }]}
+          toolbar={<FilterTabs options={filterOptions} value={status} onChange={setStatus} label="Event filter" />}
+          emptyState={
+            events.length === 0 ? (
+              <EmptyState
+                icon={CalendarPlus}
+                title="No events yet"
+                description="Create one to put it on the public calendar and start taking registrations."
+                action={<Button variant="primary" icon={CalendarPlus} onClick={() => setEditor({ event: null })}>New event</Button>}
+              />
+            ) : (
+              <EmptyState
+                compact
+                icon={Users}
+                title={`No ${status} events`}
+                description="Try another filter or clear the search."
+              />
+            )
+          }
+        />
       )}
 
-      {/* Create/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Event' : 'Create Event'} size="lg">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['en', 'ar', 'fr'].map(lang => (
-              <div key={lang}>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Title ({lang.toUpperCase()})</label>
-                <input value={form[`title_${lang}`]} onChange={e => setForm({...form, [`title_${lang}`]: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['en', 'ar', 'fr'].map(lang => (
-              <div key={lang}>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Description ({lang.toUpperCase()})</label>
-                <textarea value={form[`description_${lang}`]} onChange={e => setForm({...form, [`description_${lang}`]: e.target.value})} rows={3} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Date</label>
-              <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Time</label>
-              <input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['en', 'ar', 'fr'].map(lang => (
-              <div key={lang}>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Location ({lang.toUpperCase()})</label>
-                <input value={form[`location_${lang}`]} onChange={e => setForm({...form, [`location_${lang}`]: e.target.value})} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-              </div>
-            ))}
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Poster</label>
-            <div className="flex items-center gap-3">
-              <label className="admin-btn flex items-center gap-2 px-4 py-2 rounded-xl border text-sm cursor-pointer" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text-muted)' }}>
-                <Upload size={14} /> Upload
-                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                  const fd = new FormData()
-                  fd.append('file', e.target.files[0])
-                  const res = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${useAdminStore.getState().session?.access_token}` }, body: fd })
-                  const { url } = await res.json()
-                  setForm({...form, poster_url: url})
-                }} />
-              </label>
-              {form.poster_url && (
-                <div className="relative">
-                  <img src={form.poster_url} alt="" className="w-16 h-16 object-cover rounded-lg border" style={{ borderColor: 'var(--color-border-light)' }} />
-                  <button onClick={() => setForm({...form, poster_url: ''})} className="admin-icon-btn absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center hover:bg-red-600">&times;</button>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Max Participants</label>
-              <input type="number" value={form.max_participants} onChange={e => setForm({...form, max_participants: parseInt(e.target.value) || 0})} className="w-24 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }} />
-            </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={form.registration_open} onChange={e => setForm({...form, registration_open: e.target.checked})} />
-              Registration Open
+      <EventEditor
+        key={editor?.event?.id || 'new'}
+        open={!!editor}
+        event={editor?.event}
+        onClose={() => setEditor(null)}
+        onSaved={() => { setEditor(null); load() }}
+        addToast={addToast}
+        createdBy={adminProfile?.user_id}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title="Delete this event?"
+        message={
+          pendingDelete
+            ? `“${pendingDelete.title_en}” and all ${seats[pendingDelete.id]?.total || 0} of its registrations will be removed. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete event"
+      />
+    </div>
+  )
+}
+
+function EventEditor({ open, event, onClose, onSaved, addToast, createdBy }) {
+  const [form, setForm] = useState(BLANK)
+  const [lang, setLang] = useState('en')
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(0)
+
+  useEffect(() => {
+    if (!open) return
+    setForm(event
+      ? { ...toForm(BLANK, event), date: toDateInput(event.date), max_participants: event.max_participants || 0 }
+      : BLANK)
+    setErrors({})
+    setLang('en')
+  }, [open, event])
+
+  const set = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => ({ ...e, [key]: undefined }))
+  }
+
+  const upload = async file => {
+    if (!file) return
+    setUploading(1)
+    try {
+      const url = await uploadFile(file, pct => setUploading(Math.max(1, pct)))
+      set('poster_url', url)
+    } catch (err) {
+      addToast(err.message, 'error')
+    } finally {
+      setUploading(0)
+    }
+  }
+
+  const save = async () => {
+    // The title and date are NOT NULL in the database. Saving without them used
+    // to fail silently and still report success.
+    const next = {}
+    if (!form.title_en.trim()) next.title_en = 'An English title is required — it is what the site shows.'
+    if (!form.date) next.date = 'Pick a date.'
+    if (form.max_participants < 0) next.max_participants = 'Seats cannot be negative.'
+    if (Object.keys(next).length) {
+      setErrors(next)
+      if (next.title_en) setLang('en')
+      return
+    }
+
+    setSaving(true)
+    const payload = {
+      title_en: form.title_en.trim(), title_ar: form.title_ar.trim() || null, title_fr: form.title_fr.trim() || null,
+      description_en: form.description_en || null, description_ar: form.description_ar || null, description_fr: form.description_fr || null,
+      location_en: form.location_en || null, location_ar: form.location_ar || null, location_fr: form.location_fr || null,
+      date: form.date,
+      time: form.time || null,
+      poster_url: form.poster_url || null,
+      max_participants: Number(form.max_participants) || 0,
+      registration_open: form.registration_open,
+      is_published: form.is_published,
+    }
+
+    const { ok } = await run(
+      event
+        ? supabase.from('events').update(payload).eq('id', event.id)
+        : supabase.from('events').insert({ ...payload, created_by: createdBy }),
+      {
+        success: event ? `“${payload.title_en}” updated.` : `“${payload.title_en}” created.`,
+        failure: 'The event did not save.',
+      }
+    )
+    setSaving(false)
+    if (ok) onSaved()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      title={event ? 'Edit event' : 'New event'}
+      description="Arabic and French are optional. The site falls back to English where a translation is missing."
+      footer={
+        <>
+          <Button onClick={onClose} data-dialog-dismiss="true">Cancel</Button>
+          <Button variant="primary" onClick={save} busy={saving} busyLabel="Saving…">
+            {event ? 'Save changes' : 'Create event'}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <LocalizedField
+          label="Title" prefix="title" required
+          values={form} onChange={set} lang={lang} onLangChange={setLang}
+          error={errors.title_en}
+        />
+        <LocalizedField
+          label="Description" prefix="description" multiline rows={4}
+          values={form} onChange={set} lang={lang} onLangChange={setLang}
+        />
+        <LocalizedField
+          label="Location" prefix="location"
+          values={form} onChange={set} lang={lang} onLangChange={setLang}
+        />
+
+        <div className="grid sm:grid-cols-3 gap-4">
+          <TextField
+            label="Date" type="date" required
+            value={form.date} error={errors.date}
+            onChange={e => set('date', e.target.value)}
+          />
+          <TextField
+            label="Start time" type="time"
+            value={form.time || ''}
+            onChange={e => set('time', e.target.value)}
+          />
+          <TextField
+            label="Seats" type="number" min={0}
+            hint="0 means no limit"
+            value={form.max_participants} error={errors.max_participants}
+            onChange={e => set('max_participants', e.target.value === '' ? 0 : Number(e.target.value))}
+          />
+        </div>
+
+        <div>
+          <span className="adm-label">Poster</span>
+          <div className="flex items-center gap-3">
+            <label className="adm-btn" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+              {uploading ? <Loader2 size={15} className="adm-spin" /> : <Upload size={15} />}
+              {uploading ? `Uploading ${uploading}%` : form.poster_url ? 'Replace image' : 'Upload image'}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={!!uploading}
+                onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }}
+              />
             </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
-              <input type="checkbox" checked={form.is_published} onChange={e => setForm({...form, is_published: e.target.checked})} />
-              Published
-            </label>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
-            <button onClick={() => setModalOpen(false)} className="admin-btn px-4 py-2 rounded-xl text-sm font-medium border" style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text)' }}>Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="admin-btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: 'var(--color-accent)' }}>
-              {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
-            </button>
+            {form.poster_url && (
+              <div className="flex items-center gap-2">
+                <img
+                  src={form.poster_url}
+                  alt="Event poster preview"
+                  className="rounded-lg object-cover"
+                  style={{ width: 52, height: 52, border: '1px solid var(--adm-trace)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => set('poster_url', '')}
+                  className="text-[13px] font-medium"
+                  style={{ color: 'var(--adm-fault)' }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </Modal>
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Event" message="Are you sure you want to delete this event? This action cannot be undone." />
-    </motion.div>
+        <div
+          className="flex flex-col gap-3 pt-4"
+          style={{ borderTop: '1px solid var(--adm-trace)' }}
+        >
+          <CheckField
+            label="Published"
+            description="Show this event on the public site."
+            checked={form.is_published}
+            onChange={v => set('is_published', v)}
+          />
+          <CheckField
+            label="Registration open"
+            description="Let visitors sign up. Each sign-up needs approving before a seat is confirmed."
+            checked={form.registration_open}
+            onChange={v => set('registration_open', v)}
+          />
+          {form.registration_open && !form.is_published && (
+            <p className="flex items-center gap-2 text-xs" style={{ color: 'var(--adm-wait)' }}>
+              <Badge tone="wait">Heads up</Badge>
+              Registration is open but the event is not published, so nobody can reach the form.
+            </p>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
