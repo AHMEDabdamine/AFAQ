@@ -52,7 +52,12 @@ export default function Navbar() {
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 md:h-20">
+        {/* Height comes from --nav-h so the space pages reserve below the bar
+            can never drift from the bar's actual size. */}
+        <div
+          className="flex items-center justify-between"
+          style={{ height: "var(--nav-h)" }}
+        >
           <Link to="/" className="flex items-center gap-2.5 group">
             <div className="transition-transform duration-300 group-hover:scale-105">
               <Logo size={36} variant="black" />

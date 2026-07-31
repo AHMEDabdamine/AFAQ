@@ -455,8 +455,15 @@ function StatsBar() {
 
 export default function HeroSection() {
   return (
-    <section className="min-h-screen bg-[#EEF2FF] flex flex-col">
-      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-6 lg:gap-8 items-center max-w-7xl mx-auto w-full py-12 sm:py-20">
+    /* The section starts at y=0 and the fixed bar overlays its first --nav-h
+       pixels, so the padding is what actually pushes the content clear. Height
+       stays a full viewport (border-box already counts that padding), and svh
+       rather than vh keeps mobile browser chrome from clipping the stats bar. */
+    <section
+      className="bg-[#EEF2FF] flex flex-col"
+      style={{ minHeight: "100svh", paddingTop: "var(--nav-h)" }}
+    >
+      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-6 lg:gap-8 items-center max-w-7xl mx-auto w-full pt-8 pb-12 sm:pt-12 sm:pb-20">
         <HeroLeft />
         <HeroRight />
       </div>

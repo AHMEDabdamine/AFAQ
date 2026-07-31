@@ -61,9 +61,25 @@
   font-family: "Minecraft", system-ui, sans-serif;
 }
 
+/* The navbar is fixed, so it is out of flow and every page beneath it has to
+   leave room by hand. That height lived as `h-16 md:h-20` in the navbar and as
+   separate padding guesses in each page, which is how the home hero ended up
+   overlapping: 48px of padding under a 64px bar. One value, used by both. */
+:root {
+  --nav-h: 64px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --nav-h: 80px;
+  }
+}
+
 html {
   scroll-behavior: smooth;
   overflow-y: scroll;
+  /* Anchor jumps land below the fixed bar instead of behind it. */
+  scroll-padding-top: var(--nav-h);
 }
 
 body {
@@ -1618,4 +1634,196 @@ select.form-input {
   display: block;
   height: 100%;
   background: var(--color-accent);
+}
+
+/* ── Decorative side illustrations ──────────────────────────────────────────
+   These were given `animate-float-slow`, whose keyframes set `transform`
+   outright — clobbering the inline `translateY(-50%)` that centres them, so
+   the images sat half their own height off-centre the whole time the loop
+   ran. Animating the individual `translate`/`rotate` properties composes with
+   `transform` instead of replacing it, so the centring survives. */
+
+.side-image {
+  filter: drop-shadow(0 25px 35px rgba(36, 96, 231, 0.25));
+  animation: sideFloat 7s ease-in-out infinite;
+  will-change: translate;
+}
+
+@keyframes sideFloat {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  33% {
+    translate: 0 -6px;
+    rotate: 0.5deg;
+  }
+  66% {
+    translate: 0 3px;
+    rotate: -0.5deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-image {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+/* ── Language switcher ──────────────────────────────────────────────────────
+   The trigger shows the current language rather than a generic globe, and the
+   hover states use theme tokens — `hover:bg-black/5` was invisible in dark
+   mode. */
+
+.lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease;
+}
+
+.lang-trigger:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.lang-menu {
+  position: absolute;
+  top: 100%;
+  inset-inline-end: 0;
+  margin-top: 6px;
+  min-width: 172px;
+  padding: 5px;
+  z-index: 50;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+  border-radius: 14px;
+  background: var(--color-card);
+  box-shadow: 0 12px 34px rgba(10, 18, 32, 0.16);
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-option:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+}
+
+.lang-option[data-current="true"] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.lang-option-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: var(--color-bg-alt);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.lang-option[data-current="true"] .lang-option-code {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+/* ── Site footer ────────────────────────────────────────────────────────────
+   The footer is a deliberately dark band — its gradient is built on #0F0F11.
+   It used to sit on that gradient at 10% opacity while its text inherited the
+   page colour, so in light mode near-black type landed on a washed mid-grey.
+   Pinning the surface dark and the type light makes it read the same in both
+   themes, which is what the gradient always assumed. */
+
+.site-footer {
+  --footer-accent: #3ca2fa;
+  background: #0f0f11;
+  color: rgba(255, 255, 255, 0.92);
+  color-scheme: dark;
+}
+
+.footer-heading {
+  margin-bottom: 18px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.footer-muted {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer-link {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.footer-link:hover {
+  color: var(--footer-accent);
+}
+
+.footer-link:focus-visible {
+  outline: 2px solid var(--footer-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.footer-icon {
+  flex-shrink: 0;
+  color: var(--footer-accent);
+}
+
+.footer-rule {
+  height: 1px;
+  margin: 32px 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Social buttons sit on the dark footer band, so they take a translucent
+   white chip rather than the light-blue one used against page backgrounds. */
+.site-footer .social-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.site-footer .social-btn:hover {
+  background: var(--footer-accent);
+  border-color: var(--footer-accent);
+  color: #0f0f11;
 }
