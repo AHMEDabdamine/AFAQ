@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Send, Check, User, BookOpen, Heart, ArrowLeft, ArrowRight } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import SideImage from '../components/shared/SideImage'
 import ProgresButton from '../components/registration/ProgresButton'
+import {
+  FormError, SelectField, TextAreaField, TextField,
+} from '../components/forms/Field'
 
 const spring = { type: 'spring', damping: 22, stiffness: 200 }
 const fastSpring = { type: 'spring', damping: 16, stiffness: 300 }
@@ -25,55 +27,59 @@ const initialForm = {
 }
 
 export default function JoinUs() {
-  const { t, i18n } = useTranslation('join')
+  const { t } = useTranslation('join')
   const [step, setStep] = useState(0)
   const [form, setForm] = useState(initialForm)
   const [status, setStatus] = useState('idle')
   const [errors, setErrors] = useState({})
+  const [formError, setFormError] = useState('')
   const [shaking, setShaking] = useState(null)
   const [showAutoFillBanner, setShowAutoFillBanner] = useState(false)
-  const inputRefs = useRef({})
+  const firstFieldRefs = useRef({})
 
   useEffect(() => {
-    const firstInput = inputRefs.current[`step-${step}`]
-    if (firstInput) firstInput.focus()
+    firstFieldRefs.current[step]?.focus()
   }, [step])
 
   const validate = () => {
     const errs = {}
     if (step === 0) {
-      if (!form.student_id.trim()) errs.student_id = t('form.validation.required')
       if (!form.full_name.trim()) errs.full_name = t('form.validation.required')
+      if (!form.student_id.trim()) errs.student_id = t('form.validation.required')
       if (!form.email.trim()) errs.email = t('form.validation.required')
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = t('form.validation.email')
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errs.email = t('form.validation.email')
     } else if (step === 1) {
       if (!form.department) errs.department = t('form.validation.required')
       if (!form.study_year) errs.study_year = t('form.validation.required')
     } else if (step === 2) {
       if (!form.motivation.trim()) errs.motivation = t('form.validation.required')
     }
+
     setErrors(errs)
-    if (Object.keys(errs).length > 0) {
-      const firstField = Object.keys(errs)[0]
-      setShaking(firstField)
+    const first = Object.keys(errs)[0]
+    if (first) {
+      setShaking(first)
       setTimeout(() => setShaking(null), 500)
     }
-    return Object.keys(errs).length === 0
+    return !first
   }
-
-  const clearDuplicate = () => setErrors(prev => { const { duplicate, ...rest } = prev; return rest })
 
   const autoFillFields = ['full_name', 'student_id', 'email', 'phone', 'department', 'study_year']
 
-  const updateForm = (patch) => {
-    if ('student_id' in patch || 'email' in patch) clearDuplicate()
+  const updateForm = patch => {
+    setForm(prev => ({ ...prev, ...patch }))
+    setErrors(prev => {
+      const next = { ...prev }
+      for (const key of Object.keys(patch)) delete next[key]
+      return next
+    })
+    setFormError('')
     if (showAutoFillBanner && Object.keys(patch).some(k => autoFillFields.includes(k))) {
       setShowAutoFillBanner(false)
     }
-    setForm(prev => ({ ...prev, ...patch }))
   }
 
-  const handleProgresSuccess = (data) => {
+  const handleProgresSuccess = data => {
     const patch = {}
     if (data.userName || data.student_id) patch.student_id = data.userName || data.student_id
     if (data.full_name) patch.full_name = data.full_name
@@ -87,49 +93,81 @@ export default function JoinUs() {
 
   const nextStep = () => {
     if (!validate()) return
-    clearDuplicate()
+    setFormError('')
     setStep(s => Math.min(s + 1, 2))
   }
 
   const prevStep = () => {
-    clearDuplicate()
+    setFormError('')
     setStep(s => Math.max(s - 1, 0))
   }
 
-  const handleSubmit = async () => {
+  const submitApplication = async () => {
     if (!validate()) return
     setStatus('loading')
+    setFormError('')
 
-    let query = supabase.from('membership_applications').select('id').eq('email', form.email)
-    if (form.student_id) query = query.or(`student_id.eq.${form.student_id}`)
+    const email = form.email.trim().toLowerCase()
+    const studentId = form.student_id.trim()
 
-    const { data: existing, error: queryError } = await query
-
-    if (queryError) {
-      console.error(queryError)
-      setStatus('error')
-      return
-    }
-
-    if (existing && existing.length > 0) {
-      setStatus('idle')
-      setErrors({ duplicate: t('form.duplicateApplication') })
-      return
-    }
-
-    const { error } = await supabase.from('membership_applications').insert([form])
-    if (error) {
-      console.error(error)
-      setStatus('error')
-    } else {
-      fetch('/api/email/membership-confirmation', {
+    /* The duplicate check runs on the server. Anonymous visitors may INSERT
+       into membership_applications but not SELECT from it, so a browser-side
+       lookup can never see an existing application — it matches nothing and
+       lets every repeat straight through. (The old query was also written as
+       .eq(email).or(student_id), which PostgREST reads as "email AND
+       student_id"; both problems are gone now the check runs where the rows
+       are visible.) */
+    let result
+    try {
+      const res = await fetch('/api/register/membership', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, name: form.full_name }),
-      }).catch(() => {})
-      setStatus('success')
-      setForm(initialForm)
+        body: JSON.stringify({
+          full_name: form.full_name.trim(),
+          student_id: studentId || null,
+          email,
+          phone: form.phone.trim() || null,
+          department: form.department || null,
+          study_year: form.study_year || null,
+          interests: form.interests,
+          skills: form.skills,
+          motivation: form.motivation.trim(),
+        }),
+      })
+      result = { ok: res.ok, payload: await res.json().catch(() => ({})) }
+    } catch {
+      setStatus('idle')
+      setFormError(t('form.networkError'))
+      return
     }
+
+    if (!result.ok) {
+      setStatus('idle')
+      setFormError(
+        result.payload.code === 'duplicate'
+          ? t('form.duplicateApplication')
+          : result.payload.error || t('form.error')
+      )
+      return
+    }
+
+    fetch('/api/email/membership-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name: form.full_name.trim() }),
+    }).catch(() => {})
+
+    setStatus('success')
+    setForm(initialForm)
+  }
+
+  /* One submit path for the whole wizard, so Enter advances a step and, on the
+     last one, sends the application. The old markup had no <form> at all, so
+     the keyboard did nothing. */
+  const handleFormSubmit = e => {
+    e.preventDefault()
+    if (step < 2) nextStep()
+    else submitApplication()
   }
 
   const toggleArray = (field, value) => {
@@ -152,52 +190,17 @@ export default function JoinUs() {
     ? [...yearOptions, form.study_year]
     : yearOptions
 
-  const inputStyle = (field) => ({
-    background: 'var(--color-bg)',
-    border: `1.5px solid ${errors[field] ? '#EF4444' : 'var(--color-border-light)'}`,
-    borderRadius: 100,
-    padding: '16px 20px',
-    fontSize: 15,
-    color: 'var(--color-text)',
-    width: '100%',
-    outline: 'none',
-    transition: 'border-color 0.2s, box-shadow 0.2s',
-  })
-
-  const setInputRef = (stepIdx, el) => {
-    inputRefs.current[`step-${stepIdx}`] = el
-  }
-
   return (
     <div className="relative">
-      <section
-        className="pt-24 pb-16 md:pt-32 md:pb-20"
-        style={{ background: 'var(--color-bg-alt)' }}
-      >
+      <section className="pt-24 pb-16 md:pt-32 md:pb-20" style={{ background: 'var(--color-bg-alt)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={spring}
-            className="eyebrow eyebrow-center mb-4"
-          >
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={spring} className="eyebrow eyebrow-center mb-4">
             {t('hero.title')}
           </motion.div>
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...spring, delay: 0.1 }}
-            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4"
-          >
+          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring, delay: 0.1 }} className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
             {t('hero.title')}
           </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...spring, delay: 0.2 }}
-            className="text-lg max-w-2xl mx-auto"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
+          <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring, delay: 0.2 }} className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-text-muted)' }}>
             {t('hero.subtitle')}
           </motion.p>
         </div>
@@ -212,29 +215,24 @@ export default function JoinUs() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ ...spring, delay: 0.1 }}
-                className="text-center py-8"
+                className="text-center py-6"
               >
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ ...fastSpring, delay: 0.2 }}
                   className="inline-flex items-center justify-center mb-6"
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: '50%',
-                    background: 'rgba(22, 163, 74, 0.1)',
-                    color: '#16A34A',
-                  }}
+                  style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.1)', color: '#16A34A' }}
                 >
                   <Check size={36} style={{ strokeWidth: 3 }} />
                 </motion.div>
-                <h3 className="text-2xl font-bold mb-3">
-                  {t('form.success')}
-                </h3>
+                <h3 className="text-2xl font-bold mb-3">{t('form.successTitle')}</h3>
+                <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: 'var(--color-text-muted)' }}>
+                  {t('form.successBody')}
+                </p>
               </motion.div>
             ) : (
-              <>
+              <form onSubmit={handleFormSubmit} noValidate>
                 <div className="step-indicator">
                   {steps.map((s, i) => {
                     const StepIcon = stepIcons[i]
@@ -246,6 +244,7 @@ export default function JoinUs() {
                           animate={{ scale: isActive ? 1.15 : 1 }}
                           transition={fastSpring}
                           className={`step-circle ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}
+                          aria-current={isActive ? 'step' : undefined}
                         >
                           {isDone ? <Check size={16} /> : <StepIcon size={16} />}
                         </motion.div>
@@ -269,6 +268,7 @@ export default function JoinUs() {
                     transition={spring}
                     className="text-xs font-semibold"
                     style={{ color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}
+                    aria-live="polite"
                   >
                     {t('form.step', { current: step + 1, total: 3 })}
                   </motion.p>
@@ -293,216 +293,98 @@ export default function JoinUs() {
                   >
                     {step === 0 && (
                       <div className="space-y-5">
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.fullName')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'full_name' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <input
-                              ref={el => setInputRef(0, el)}
-                              style={inputStyle('full_name')}
-                              value={form.full_name}
-                              onChange={e => updateForm({ full_name: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                              placeholder="Ahmed Mansouri"
-                            />
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.full_name && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.full_name}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.studentId')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'student_id' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <input
-                              style={inputStyle('student_id')}
-                              value={form.student_id}
-                              onChange={e => updateForm({ student_id: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                              placeholder="20XX000XXXXX"
-                            />
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.student_id && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.student_id}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.email')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'email' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <input
-                              style={inputStyle('email')}
-                              type="email"
-                              value={form.email}
-                              onChange={e => updateForm({ email: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                              placeholder="ahmed@univ-bouira.dz"
-                            />
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.email && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.email}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.phone')}
-                          </label>
-                          <input
-                            style={inputStyle('phone')}
-                            value={form.phone}
-                            onChange={e => updateForm({ phone: e.target.value })}
-                            onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                            onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                            placeholder="+213 6XX XXX XXX"
-                          />
-                        </div>
+                        <TextField
+                          label={t('form.fullName')} required autoComplete="name"
+                          inputRef={el => { firstFieldRefs.current[0] = el }}
+                          value={form.full_name} error={errors.full_name} shake={shaking === 'full_name'}
+                          onChange={e => updateForm({ full_name: e.target.value })}
+                          placeholder="Ahmed Mansouri"
+                        />
+                        <TextField
+                          label={t('form.studentId')} required inputMode="numeric" autoComplete="off"
+                          value={form.student_id} error={errors.student_id} shake={shaking === 'student_id'}
+                          onChange={e => updateForm({ student_id: e.target.value })}
+                          placeholder="20XX000XXXXX"
+                        />
+                        <TextField
+                          label={t('form.email')} required type="email" autoComplete="email"
+                          value={form.email} error={errors.email} shake={shaking === 'email'}
+                          onChange={e => updateForm({ email: e.target.value })}
+                          placeholder="ahmed@univ-bouira.dz"
+                        />
+                        <TextField
+                          label={t('form.phone')} type="tel" autoComplete="tel"
+                          value={form.phone}
+                          onChange={e => updateForm({ phone: e.target.value })}
+                          placeholder="+213 6XX XXX XXX"
+                        />
                       </div>
                     )}
 
                     {step === 1 && (
                       <div className="space-y-5">
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.department')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'department' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <select
-                              ref={el => setInputRef(1, el)}
-                              style={inputStyle('department')}
-                              value={form.department}
-                              onChange={e => updateForm({ department: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                            >
-                              <option value="">—</option>
-                              {departments.map(d => (
-                                <option key={d} value={d}>{t(`departments.${d}`)}</option>
-                              ))}
-                            </select>
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.department && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.department}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.studyYear')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'study_year' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <select
-                              style={inputStyle('study_year')}
-                              value={form.study_year}
-                              onChange={e => updateForm({ study_year: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                            >
-                              <option value="">—</option>
-                              {years.map(y => (
-                                <option key={y} value={y}>{t(`years.${y}`)}</option>
-                              ))}
-                            </select>
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.study_year && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.study_year}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        <SelectField
+                          label={t('form.department')} required
+                          inputRef={el => { firstFieldRefs.current[1] = el }}
+                          value={form.department} error={errors.department} shake={shaking === 'department'}
+                          onChange={e => updateForm({ department: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          {departments.map(d => (
+                            <option key={d} value={d}>{t(`departments.${d}`)}</option>
+                          ))}
+                        </SelectField>
+                        <SelectField
+                          label={t('form.studyYear')} required
+                          value={form.study_year} error={errors.study_year} shake={shaking === 'study_year'}
+                          onChange={e => updateForm({ study_year: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          {years.map(y => (
+                            <option key={y} value={y}>{t(`years.${y}`)}</option>
+                          ))}
+                        </SelectField>
                       </div>
                     )}
 
                     {step === 2 && (
                       <div className="space-y-6">
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.interests')}
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {interests.map(i => (
-                              <motion.button
-                                key={i}
-                                type="button"
-                                whileTap={{ scale: 0.92 }}
-                                onClick={() => toggleArray('interests', i)}
-                                className={`pill ${form.interests.includes(i) ? 'active' : ''}`}
-                              >
-                                {form.interests.includes(i) && <Check size={12} />}
-                                {t(`interestOptions.${i}`)}
-                              </motion.button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.skills')}
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {skillOpts.map(s => (
-                              <motion.button
-                                key={s}
-                                type="button"
-                                whileTap={{ scale: 0.92 }}
-                                onClick={() => toggleArray('skills', s)}
-                                className={`pill ${form.skills.includes(s) ? 'active' : ''}`}
-                              >
-                                {form.skills.includes(s) && <Check size={12} />}
-                                {t(`skillOptions.${s}`)}
-                              </motion.button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--color-text-muted)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                            {t('form.motivation')} *
-                          </label>
-                          <motion.div animate={{ x: shaking === 'motivation' ? [0, -6, 6, -6, 6, 0] : 0 }} transition={{ duration: 0.4 }}>
-                            <textarea
-                              ref={el => setInputRef(2, el)}
-                              style={{ ...inputStyle('motivation'), borderRadius: 20, minHeight: 120, resize: 'vertical' }}
-                              rows={4}
-                              value={form.motivation}
-                              onChange={e => updateForm({ motivation: e.target.value })}
-                              onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(36,96,231,0.15)'; e.target.style.borderColor = 'var(--color-accent)' }}
-                              onBlur={e => { e.target.style.boxShadow = 'none'; e.target.style.borderColor = 'var(--color-border-light)' }}
-                              placeholder={t('form.motivationPlaceholder')}
-                            />
-                          </motion.div>
-                          <AnimatePresence>
-                            {errors.motivation && (
-                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs mt-1.5" style={{ color: '#EF4444' }}>{errors.motivation}</motion.p>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        <PillGroup
+                          legend={t('form.interests')}
+                          options={interests}
+                          selected={form.interests}
+                          labelFor={i => t(`interestOptions.${i}`)}
+                          onToggle={i => toggleArray('interests', i)}
+                        />
+                        <PillGroup
+                          legend={t('form.skills')}
+                          options={skillOpts}
+                          selected={form.skills}
+                          labelFor={s => t(`skillOptions.${s}`)}
+                          onToggle={s => toggleArray('skills', s)}
+                        />
+                        <TextAreaField
+                          label={t('form.motivation')} required rows={4}
+                          inputRef={el => { firstFieldRefs.current[2] = el }}
+                          style={{ borderRadius: 20, minHeight: 120 }}
+                          value={form.motivation} error={errors.motivation} shake={shaking === 'motivation'}
+                          onChange={e => updateForm({ motivation: e.target.value })}
+                          placeholder={t('form.motivationPlaceholder')}
+                        />
                       </div>
                     )}
                   </motion.div>
                 </AnimatePresence>
 
-                <AnimatePresence>
-                  {status === 'error' && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: '#EF4444' }}>{t('form.error')}</motion.p>
-                  )}
-                  {errors.duplicate && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-center mt-4" style={{ color: '#EF4444' }}>{errors.duplicate}</motion.p>
-                  )}
-                </AnimatePresence>
+                {formError && (
+                  <div className="mt-5">
+                    <FormError message={formError} />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between mt-8 gap-4">
                   <motion.button
+                    type="button"
                     onClick={prevStep}
                     disabled={step === 0}
                     whileTap={step !== 0 ? { scale: 0.95 } : {}}
@@ -510,7 +392,7 @@ export default function JoinUs() {
                     style={{
                       background: 'transparent',
                       color: step === 0 ? 'var(--color-border)' : 'var(--color-text-muted)',
-                      border: `1.5px solid var(--color-border)`,
+                      border: '1.5px solid var(--color-border)',
                       cursor: step === 0 ? 'not-allowed' : 'pointer',
                       opacity: step === 0 ? 0.4 : 1,
                     }}
@@ -521,7 +403,7 @@ export default function JoinUs() {
 
                   {step < 2 ? (
                     <motion.button
-                      onClick={nextStep}
+                      type="submit"
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.95 }}
                       className="inline-flex items-center gap-2 px-6 py-2.5 rounded-[100px] font-semibold text-sm transition-all duration-200"
@@ -531,7 +413,7 @@ export default function JoinUs() {
                     </motion.button>
                   ) : (
                     <motion.button
-                      onClick={handleSubmit}
+                      type="submit"
                       disabled={status === 'loading'}
                       whileHover={status !== 'loading' ? { scale: 1.03 } : {}}
                       whileTap={status !== 'loading' ? { scale: 0.95 } : {}}
@@ -543,7 +425,7 @@ export default function JoinUs() {
                       }}
                     >
                       {status === 'loading' ? (
-                        <motion.div
+                        <motion.span
                           animate={{ rotate: 360 }}
                           transition={{ repeat: Infinity, duration: 0.6, ease: 'linear' }}
                           style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%' }}
@@ -558,7 +440,6 @@ export default function JoinUs() {
 
                 <div className="text-center mt-6">
                   <ProgresButton onSuccess={handleProgresSuccess} />
-
                   {showAutoFillBanner && (
                     <motion.p
                       initial={{ opacity: 0, y: -4 }}
@@ -570,11 +451,38 @@ export default function JoinUs() {
                     </motion.p>
                   )}
                 </div>
-              </>
+              </form>
             )}
           </div>
         </div>
       </section>
     </div>
+  )
+}
+
+/** Multi-select pills grouped under a real legend rather than a loose label. */
+function PillGroup({ legend, options, selected, labelFor, onToggle }) {
+  return (
+    <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend className="pf-label">{legend}</legend>
+      <div className="flex flex-wrap gap-2">
+        {options.map(option => {
+          const isOn = selected.includes(option)
+          return (
+            <motion.button
+              key={option}
+              type="button"
+              whileTap={{ scale: 0.92 }}
+              aria-pressed={isOn}
+              onClick={() => onToggle(option)}
+              className={`pill ${isOn ? 'active' : ''}`}
+            >
+              {isOn && <Check size={12} />}
+              {labelFor(option)}
+            </motion.button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }

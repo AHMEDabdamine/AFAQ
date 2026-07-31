@@ -26,7 +26,10 @@
     "validation": {
       "required": "This field is required",
       "email": "Please enter a valid email address"
-    }
+    },
+    "successTitle": "Application received",
+    "successBody": "Thanks for applying. A club admin reviews every application, and you will hear back at the email you gave us.",
+    "networkError": "We could not reach the server. Check your connection and try again."
   },
   "departments": {
     "fsas": "Faculty of Sciences and Applied Sciences",

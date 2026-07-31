@@ -5,30 +5,58 @@ import { Mail, MapPin, Send } from 'lucide-react'
 import SocialIcons from '../components/shared/SocialIcons'
 import SideImage from '../components/shared/SideImage'
 import { supabase } from '../lib/supabase'
+import { FloatingField, FormError } from '../components/forms/Field'
 
 const spring = { type: 'spring', damping: 28, stiffness: 120 }
 
 export default function Contact() {
   const { t } = useTranslation('contact')
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
+  const blank = { name: '', email: '', subject: '', message: '' }
+  const [form, setForm] = useState(blank)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState({})
+
+  const update = (field, value) => {
+    setForm(f => ({ ...f, [field]: value }))
+    setErrors(e => ({ ...e, [field]: undefined }))
+    setError('')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // Validated here rather than left to the browser, so each message arrives
+    // in the visitor's own language and names the field it belongs to.
+    const found = {}
+    if (!form.name.trim()) found.name = t('form.validation.name')
+    if (!form.email.trim()) found.email = t('form.validation.email')
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) found.email = t('form.validation.emailFormat')
+    if (!form.message.trim()) found.message = t('form.validation.message')
+    if (Object.keys(found).length) { setErrors(found); return }
+
     setLoading(true)
     setError('')
-    const { error: err } = await supabase.from('contact_messages').insert([form])
+
+    const { error: err } = await supabase.from('contact_messages').insert([{
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      subject: form.subject.trim() || t('form.title'),
+      message: form.message.trim(),
+    }])
+
+    setLoading(false)
     if (err) {
-      setError(err.message)
-      setLoading(false)
+      // A raw Postgres string is not an answer to "what do I do now".
+      setError(/fetch|network/i.test(err.message || '') ? t('form.networkError') : t('form.error'))
       return
     }
-    setLoading(false)
     setDone(true)
-    setForm({ name: '', email: '', subject: '', message: '' })
+    setForm(blank)
   }
+
+  const sendAnother = () => { setDone(false); setErrors({}); setError('') }
 
   return (
     <>
@@ -87,32 +115,46 @@ export default function Contact() {
                       style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.1)', color: '#16A34A' }}>
                       <Send size={32} />
                     </motion.div>
-                    <h3 className="text-2xl font-bold mb-3">{t('form.success')}</h3>
+                    <h3 className="text-2xl font-bold mb-3">{t('form.successTitle')}</h3>
+                    <p className="text-base leading-relaxed max-w-sm mx-auto" style={{ color: 'var(--color-text-muted)' }}>
+                      {t('form.successBody')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={sendAnother}
+                      className="mt-7 px-6 py-3 rounded-[100px] font-semibold text-sm"
+                      style={{ border: '1.5px solid var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {t('form.sendAnother')}
+                    </button>
                   </motion.div>
                 ) : (
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                     <h2 className="text-xl font-bold mb-4">{t('form.title')}</h2>
-                    {error && (
-                      <div className="p-3 rounded-xl text-sm" style={{ background: '#fef2f2', color: '#dc2626' }}>{error}</div>
-                    )}
+                    <FormError message={error} />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div className="floating-label">
-                        <input className="form-input" placeholder=" " required value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                        <label>{t('form.name')} *</label>
-                      </div>
-                      <div className="floating-label">
-                        <input className="form-input" type="email" placeholder=" " required value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-                        <label>{t('form.email')} *</label>
-                      </div>
+                      <FloatingField
+                        label={t('form.name')} required autoComplete="name"
+                        value={form.name} error={errors.name}
+                        onChange={e => update('name', e.target.value)}
+                      />
+                      <FloatingField
+                        label={t('form.email')} required type="email" autoComplete="email"
+                        value={form.email} error={errors.email}
+                        onChange={e => update('email', e.target.value)}
+                      />
                     </div>
-                    <div className="floating-label">
-                      <input className="form-input" placeholder=" " value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} />
-                      <label>{t('form.subject')}</label>
-                    </div>
-                    <div className="floating-label">
-                      <textarea className="form-input" placeholder=" " style={{ minHeight: 140, borderRadius: 20 }} required value={form.message} onChange={e => setForm({...form, message: e.target.value})} />
-                      <label>{t('form.message')} *</label>
-                    </div>
+                    <FloatingField
+                      label={t('form.subject')} autoComplete="off"
+                      value={form.subject}
+                      onChange={e => update('subject', e.target.value)}
+                    />
+                    <FloatingField
+                      label={t('form.message')} required multiline
+                      style={{ minHeight: 140, borderRadius: 20 }}
+                      value={form.message} error={errors.message}
+                      onChange={e => update('message', e.target.value)}
+                    />
                     <button type="submit" disabled={loading}
                       className="w-full py-3.5 rounded-[100px] font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
                       style={{ background: 'var(--color-accent)', color: '#fff' }}>

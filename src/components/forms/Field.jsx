@@ -63,12 +63,13 @@ function useFieldA11y(error, hint) {
   }
 }
 
-export function TextField({ label, required, error, hint, shake, ...input }) {
+export function TextField({ label, required, error, hint, shake, inputRef, ...input }) {
   const { id, describedBy } = useFieldA11y(error, hint)
   return (
     <Field label={label} htmlFor={id} required={required} error={error} hint={hint} shake={shake}>
       <input
         id={id}
+        ref={inputRef}
         className={`form-input ${error ? 'error' : ''}`}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
@@ -78,12 +79,13 @@ export function TextField({ label, required, error, hint, shake, ...input }) {
   )
 }
 
-export function SelectField({ label, required, error, hint, shake, children, ...select }) {
+export function SelectField({ label, required, error, hint, shake, inputRef, children, ...select }) {
   const { id, describedBy } = useFieldA11y(error, hint)
   return (
     <Field label={label} htmlFor={id} required={required} error={error} hint={hint} shake={shake}>
       <select
         id={id}
+        ref={inputRef}
         className={`form-input ${error ? 'error' : ''}`}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
@@ -95,12 +97,13 @@ export function SelectField({ label, required, error, hint, shake, children, ...
   )
 }
 
-export function TextAreaField({ label, required, error, hint, shake, ...textarea }) {
+export function TextAreaField({ label, required, error, hint, shake, inputRef, ...textarea }) {
   const { id, describedBy } = useFieldA11y(error, hint)
   return (
     <Field label={label} htmlFor={id} required={required} error={error} hint={hint} shake={shake}>
       <textarea
         id={id}
+        ref={inputRef}
         className={`form-input ${error ? 'error' : ''}`}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
@@ -141,6 +144,36 @@ export function CheckboxField({ label, checked, onChange, error, shake, name }) 
         </label>
       </motion.div>
       <FieldMessage id={`${id}-msg`} error={error} />
+    </div>
+  )
+}
+
+/**
+ * Floating-label variant, as used on the contact form. The label markup was
+ * already there but had no `htmlFor`, so clicking it did nothing and screen
+ * readers announced an unlabelled box.
+ */
+export function FloatingField({ label, required, error, hint, multiline, className = '', ...input }) {
+  const { id, describedBy } = useFieldA11y(error, hint)
+  const Control = multiline ? 'textarea' : 'input'
+
+  return (
+    <div className={className}>
+      <div className="floating-label">
+        <Control
+          id={id}
+          className={`form-input ${error ? 'error' : ''}`}
+          placeholder=" "
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={describedBy}
+          {...input}
+        />
+        <label htmlFor={id}>
+          {label}
+          {required && <span aria-hidden="true"> *</span>}
+        </label>
+      </div>
+      <FieldMessage id={`${id}-msg`} error={error} hint={hint} />
     </div>
   )
 }

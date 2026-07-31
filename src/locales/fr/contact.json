@@ -11,7 +11,18 @@
     "message": "Votre Message",
     "submit": "Envoyer le Message",
     "success": "Message envoye avec succès ! Nous vous repondrons bientôt.",
-    "error": "Echec de l'envoi du message. Veuillez reessayer."
+    "error": "Echec de l'envoi du message. Veuillez reessayer.",
+    "sending": "Envoi…",
+    "successTitle": "Message envoye",
+    "successBody": "Merci de nous avoir ecrit. Nous lisons tout et repondons generalement sous quelques jours.",
+    "sendAnother": "Envoyer un autre message",
+    "networkError": "Impossible de joindre le serveur. Verifiez votre connexion et reessayez.",
+    "validation": {
+      "name": "Indiquez votre nom.",
+      "email": "Entrez une adresse email pour que nous puissions repondre.",
+      "emailFormat": "Cette adresse email ne semble pas valide.",
+      "message": "Ecrivez votre message avant de l’envoyer."
+    }
   },
   "info": {
     "title": "Informations de Contact",

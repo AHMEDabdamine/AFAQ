@@ -26,7 +26,10 @@
     "validation": {
       "required": "Ce champ est requis",
       "email": "Veuillez entrer une adresse email valide"
-    }
+    },
+    "successTitle": "Candidature reçue",
+    "successBody": "Merci pour votre candidature. Un administrateur examine chaque demande et vous recevrez une reponse à l'adresse indiquee.",
+    "networkError": "Impossible de joindre le serveur. Verifiez votre connexion et reessayez."
   },
   "departments": {
     "fsas": "Faculte des Sciences et Sciences Appliquees",

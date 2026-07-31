@@ -11,7 +11,18 @@
     "message": "Your Message",
     "submit": "Send Message",
     "success": "Message sent successfully! We'll get back to you soon.",
-    "error": "Failed to send message. Please try again."
+    "error": "Failed to send message. Please try again.",
+    "sending": "Sending…",
+    "successTitle": "Message sent",
+    "successBody": "Thanks for writing in. We read everything and usually reply within a few days.",
+    "sendAnother": "Send another message",
+    "networkError": "We could not reach the server. Check your connection and try again.",
+    "validation": {
+      "name": "Tell us your name.",
+      "email": "Enter an email address so we can reply.",
+      "emailFormat": "That does not look like a valid email address.",
+      "message": "Write your message before sending."
+    }
   },
   "info": {
     "title": "Contact Information",

@@ -367,6 +367,169 @@ app.post("/api/email/membership-confirmation", async (req, res) => {
   }
 });
 
+// --- Public sign-up (seat counts, capacity and duplicate checks) ---
+//
+// These have to live on the server. Anonymous visitors hold INSERT-only rights
+// on event_registrations and membership_applications, so a browser asking
+// "how many seats are taken" or "has this email already applied" gets an empty
+// result under RLS rather than an answer. The service-role client can see the
+// rows, so capacity and duplicate rules are decided here and cannot be
+// sidestepped by posting straight at the table.
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.get("/api/events/availability", async (req, res) => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const { data: events, error: eventsErr } = await supabaseAdmin
+      .from("events")
+      .select("id, max_participants")
+      .eq("is_published", true)
+      .eq("registration_open", true)
+      .gte("date", today);
+    if (eventsErr) throw eventsErr;
+
+    const ids = (events || []).map((e) => e.id);
+    const counts = {};
+    if (ids.length) {
+      const { data: approved, error: regErr } = await supabaseAdmin
+        .from("event_registrations")
+        .select("event_id")
+        .in("event_id", ids)
+        .eq("status", "approved");
+      if (regErr) throw regErr;
+      for (const row of approved || []) {
+        counts[row.event_id] = (counts[row.event_id] || 0) + 1;
+      }
+    }
+
+    // Aggregate counts only — never who registered.
+    res.json({
+      events: (events || []).map((e) => ({
+        id: e.id,
+        capacity: e.max_participants || 0,
+        taken: counts[e.id] || 0,
+      })),
+    });
+  } catch (err) {
+    console.error("Availability error:", err.message);
+    res.status(500).json({ error: "Could not load seat availability." });
+  }
+});
+
+app.post("/api/register/event", async (req, res) => {
+  const b = req.body || {};
+  const email = String(b.email || "").trim().toLowerCase();
+  const fullName = String(b.full_name || "").trim();
+
+  if (!b.event_id) return res.status(400).json({ error: "Choose an event." });
+  if (!fullName) return res.status(400).json({ error: "Enter your full name." });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (!b.agreed_to_policies) {
+    return res.status(400).json({ error: "You must agree to the policies to register." });
+  }
+
+  try {
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("id, date, max_participants, is_published, registration_open")
+      .eq("id", b.event_id)
+      .maybeSingle();
+
+    const today = new Date().toISOString().split("T")[0];
+    if (!event || !event.is_published) {
+      return res.status(404).json({ error: "That event is no longer available." });
+    }
+    if (!event.registration_open || event.date < today) {
+      return res.status(409).json({ error: "Registration for this event has closed." });
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from("event_registrations")
+      .select("id")
+      .eq("event_id", event.id)
+      .ilike("email", email)
+      .limit(1);
+    if (existing?.length) {
+      return res.status(409).json({
+        error: "You have already registered for this event with that email address.",
+        code: "duplicate",
+      });
+    }
+
+    if (event.max_participants > 0) {
+      const { count } = await supabaseAdmin
+        .from("event_registrations")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("status", "approved");
+      if ((count || 0) >= event.max_participants) {
+        return res.status(409).json({ error: "This event is full.", code: "full" });
+      }
+    }
+
+    const { error: insertErr } = await supabaseAdmin.from("event_registrations").insert([{
+      event_id: event.id,
+      full_name: fullName,
+      student_id: b.student_id ? String(b.student_id).trim() : null,
+      email,
+      phone: b.phone ? String(b.phone).trim() : null,
+      department: b.department || null,
+      agreed_to_policies: true,
+    }]);
+    if (insertErr) throw insertErr;
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Event registration error:", err.message);
+    res.status(500).json({ error: "We could not save your registration. Please try again." });
+  }
+});
+
+app.post("/api/register/membership", async (req, res) => {
+  const b = req.body || {};
+  const email = String(b.email || "").trim().toLowerCase();
+  const fullName = String(b.full_name || "").trim();
+  const studentId = b.student_id ? String(b.student_id).trim() : "";
+
+  if (!fullName) return res.status(400).json({ error: "Enter your full name." });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
+
+  try {
+    // Either identifier already on file is a duplicate.
+    const [byEmail, byStudentId] = await Promise.all([
+      supabaseAdmin.from("membership_applications").select("id").ilike("email", email).limit(1),
+      studentId
+        ? supabaseAdmin.from("membership_applications").select("id").eq("student_id", studentId).limit(1)
+        : Promise.resolve({ data: [] }),
+    ]);
+    if (byEmail.data?.length || byStudentId.data?.length) {
+      return res.status(409).json({
+        error: "An application with this email or student ID has already been submitted.",
+        code: "duplicate",
+      });
+    }
+
+    const { error: insertErr } = await supabaseAdmin.from("membership_applications").insert([{
+      full_name: fullName,
+      student_id: studentId || null,
+      email,
+      phone: b.phone ? String(b.phone).trim() : null,
+      department: b.department || null,
+      study_year: b.study_year || null,
+      interests: Array.isArray(b.interests) ? b.interests : [],
+      skills: Array.isArray(b.skills) ? b.skills : [],
+      motivation: b.motivation ? String(b.motivation).trim() : null,
+    }]);
+    if (insertErr) throw insertErr;
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Membership application error:", err.message);
+    res.status(500).json({ error: "We could not save your application. Please try again." });
+  }
+});
+
 // --- Approve endpoints (update DB + send email) ---
 
 app.post(

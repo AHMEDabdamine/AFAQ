@@ -73,17 +73,19 @@ export default function Registration() {
       setEvents(open)
 
       if (open.length) {
-        // Approved registrations are the ones holding a seat.
-        const { data: taken } = await supabase
-          .from('event_registrations')
-          .select('event_id')
-          .in('event_id', open.map(e => e.id))
-          .eq('status', 'approved')
-
-        if (cancelled) return
-        const tally = {}
-        for (const row of taken || []) tally[row.event_id] = (tally[row.event_id] || 0) + 1
-        setSeats(tally)
+        /* Seat counts come from the server. Anonymous visitors hold
+           INSERT-only rights on event_registrations, so counting them from the
+           browser returns nothing and every event looks empty. */
+        try {
+          const res = await fetch('/api/events/availability')
+          const payload = await res.json()
+          if (cancelled) return
+          const tally = {}
+          for (const row of payload.events || []) tally[row.id] = row.taken
+          setSeats(tally)
+        } catch {
+          // No counts is better than wrong counts; the form still works.
+        }
       }
 
       setLoadingEvents(false)
@@ -203,40 +205,43 @@ export default function Registration() {
     setStatus('loading')
     const email = form.email.trim().toLowerCase()
 
-    // One person, one seat per event.
-    const { data: existing, error: lookupError } = await supabase
-      .from('event_registrations')
-      .select('id')
-      .eq('event_id', form.event_id)
-      .ilike('email', email)
-      .limit(1)
-
-    if (lookupError) {
+    /* The server owns the rules that need to read existing rows -- one seat
+       per email, and capacity. Deciding them here would mean trusting a query
+       the browser is not permitted to run. */
+    let result
+    try {
+      const res = await fetch('/api/register/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_id: form.event_id,
+          full_name: form.full_name.trim(),
+          student_id: form.student_id.trim() || null,
+          email,
+          phone: form.phone.trim() || null,
+          department: form.department || null,
+          agreed_to_policies: true,
+        }),
+      })
+      result = { ok: res.ok, payload: await res.json().catch(() => ({})) }
+    } catch {
       setStatus('idle')
-      setFormError(t('form.error'))
+      setFormError(t('form.networkError'))
       return
     }
-    if (existing?.length) {
-      setStatus('idle')
-      setErrors({ email: t('form.duplicate') })
-      setShaking('email')
-      setTimeout(() => setShaking(null), 500)
-      return
-    }
 
-    const { error } = await supabase.from('event_registrations').insert([{
-      event_id: form.event_id,
-      full_name: form.full_name.trim(),
-      student_id: form.student_id.trim() || null,
-      email,
-      phone: form.phone.trim() || null,
-      department: form.department || null,
-      agreed_to_policies: true,
-    }])
-
-    if (error) {
+    if (!result.ok) {
       setStatus('idle')
-      setFormError(/fetch|network/i.test(error.message || '') ? t('form.networkError') : t('form.error'))
+      const { code, error: message } = result.payload
+      if (code === 'duplicate') {
+        setErrors({ email: t('form.duplicate') })
+        setShaking('email')
+        setTimeout(() => setShaking(null), 500)
+      } else if (code === 'full') {
+        setFormError(t('form.eventFull'))
+      } else {
+        setFormError(message || t('form.error'))
+      }
       return
     }
 
