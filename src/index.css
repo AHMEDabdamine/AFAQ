@@ -1827,3 +1827,60 @@ select.form-input {
   border-color: var(--footer-accent);
   color: #0f0f11;
 }
+
+/* ── Hero illustration: responsive + scroll cost ────────────────────────────
+   The orbit rings use fixed pixel radii (180-300), so the composition was
+   pinned to desktop and hidden below `lg`. The ring stage is scaled as a unit
+   instead: same composition, smaller. */
+
+.hero-visual {
+  --bolt-scale: 1.05;
+  --orbit-scale: 0.42;
+}
+
+@media (min-width: 640px) {
+  .hero-visual {
+    --bolt-scale: 1.35;
+    --orbit-scale: 0.62;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero-visual {
+    --orbit-scale: 1;
+  }
+}
+
+.hero-orbits {
+  transform: scale(var(--orbit-scale));
+  transform-origin: 50% 50%;
+}
+
+/* Lenis runs in root mode, so it drives real scrollTop and the viewport is
+   recomposited every frame. Anything animating in view is paid for on every
+   one of those frames — so once the hero scrolls away, it stops animating. */
+.hero-visual.is-idle .orbit-ring,
+.hero-visual.is-idle .orbit-ring-reverse,
+.hero-visual.is-idle .orbit-particle,
+.hero-visual.is-idle .float-asset {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-ring,
+  .orbit-ring-reverse,
+  .orbit-particle,
+  .float-asset,
+  .float-pill {
+    animation: none;
+  }
+}
+
+/* Below lg the ring stage is scaled to 0.42, which renders a 2px dot at under
+   a pixel — 44 sub-pixel layers nobody can see. The ring outlines carry the
+   shape on phones; the dots come back when they are large enough to read. */
+@media (max-width: 1023px) {
+  .orbit-dot {
+    display: none;
+  }
+}

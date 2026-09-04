@@ -42,7 +42,7 @@ function Img({ src, alt, className, style, fetchPriority, loading }) {
 function Badge({ icon, label, className }) {
   return (
     <div
-      className={`absolute bg-white rounded-full shadow-lg flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-800 z-20 ${className}`}
+      className={`absolute bg-white rounded-full shadow-lg flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-4 sm:py-2 text-[11px] sm:text-sm font-semibold text-slate-800 z-20 ${className}`}
     >
       {icon}
       <span>{label}</span>
@@ -128,6 +128,22 @@ function HeroLeft() {
 function HeroRight() {
   const { i18n } = useTranslation("home");
   const isRTL = i18n.language === "ar";
+  const visualRef = useRef(null);
+
+  /* The rings spin for as long as the page is open, so they were still
+     compositing ~170 3D-transformed nodes while you read the footer. Pausing
+     them once the hero leaves the viewport gives the rest of the page its
+     frame budget back. */
+  useEffect(() => {
+    const el = visualRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => el.classList.toggle("is-idle", !entry.isIntersecting),
+      { rootMargin: "120px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const ringStyle = (tilt, radius, opts = {}) => ({
     width: radius * 2,
     height: radius * 2,
@@ -142,168 +158,161 @@ function HeroRight() {
     ...opts.extra,
   });
 
+  /* One node per dot, not two. Each particle used to be a positioning wrapper
+     around a styled child; inside a preserve-3d context that is two composited
+     layers apiece for a 2px dot. This single element carries both the orbit
+     transform and the dot itself, which is pixel-identical because the wrapper
+     was always exactly the size of its child. */
   const ringParticles = (count, radius) =>
     Array.from({ length: count }, (_, i) => {
       const angle = (360 / count) * i;
+      const bright = i % 3 === 0;
+      const size = bright ? 3 : 2;
       return (
         <div
           key={i}
+          className="orbit-dot rounded-full"
           style={{
             position: "absolute",
             left: "50%",
             top: "50%",
+            width: size,
+            height: size,
+            marginLeft: -size / 2,
+            marginTop: -size / 2,
+            background:
+              i % 2 === 0 ? "rgba(59,130,246,0.7)" : "rgba(147,197,253,0.5)",
+            boxShadow: bright ? "0 0 8px rgba(59,130,246,0.5)" : "none",
             transform: `rotateY(${angle}deg) translateZ(${radius}px)`,
           }}
-        >
-          <div
-            className="rounded-full"
-            style={{
-              width: i % 3 === 0 ? 3 : 2,
-              height: i % 3 === 0 ? 3 : 2,
-              background:
-                i % 2 === 0 ? "rgba(59,130,246,0.7)" : "rgba(147,197,253,0.5)",
-              boxShadow: i % 3 === 0 ? "0 0 8px rgba(59,130,246,0.5)" : "none",
-              marginLeft: i % 3 === 0 ? -1.5 : -1,
-              marginTop: i % 3 === 0 ? -1.5 : -1,
-            }}
-          />
-        </div>
+        />
       );
     });
 
   return (
-    <div className="hidden lg:block flex-1 relative w-full max-w-[280px] sm:max-w-sm lg:max-w-none h-[320px] sm:h-[400px] lg:h-[520px] xl:h-[600px]">
+    <div
+      ref={visualRef}
+      className="hero-visual flex-1 relative w-full mx-auto max-w-[280px] sm:max-w-sm lg:max-w-none h-[320px] sm:h-[400px] lg:h-[520px] xl:h-[600px]"
+    >
       <Img
         src="/images/hero/bolt.webp"
         alt="Bolt"
         className="absolute inset-0 w-full h-full z-0 object-contain"
         style={{
-          transform: "scale(1.35)",
+          transform: "scale(var(--bolt-scale, 1.35))",
           filter:
             "drop-shadow(0 40px 100px rgba(59,130,246,0.45)) drop-shadow(0 0 60px rgba(59,130,246,0.15))",
         }}
       />
 
-      <div
-        className="hidden md:block absolute inset-0 z-[1]"
-        style={{ perspective: 1200, transformStyle: "preserve-3d" }}
-      >
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "22s" }}
-        >
-          <div style={{ ...ringStyle(65, 260) }} />
-          {ringParticles(10, 260)}
-        </div>
+      {/* Radii are fixed pixels (180-300), so the rings cannot fit a phone-width
+          box on their own. Scaling the stage as a unit keeps the composition
+          exactly as designed instead of re-tuning every radius per breakpoint.
 
+          Three of the seven containers used to be duplicates — 220, 300 and 180
+          each had a second container with identical geometry and speed, adding
+          only a fainter border and more dots. Merged, so the same rings and the
+          same borders now cost four animated 3D contexts instead of seven. */}
+      <div className="hero-orbits absolute inset-0 z-[1]">
         <div
-          className="orbit-ring-reverse"
-          style={{ position: "absolute", inset: 0, "--speed": "28s" }}
-        >
-          <div style={{ ...ringStyle(-40, 220) }} />
-          {ringParticles(8, 220)}
-        </div>
-
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "35s" }}
-        >
-          <div style={{ ...ringStyle(80, 300) }} />
-          {ringParticles(12, 300)}
-        </div>
-
-        <div
-          className="orbit-particle"
-          style={{ position: "absolute", inset: 0, "--p-speed": "9s" }}
-        >
-          <div style={{ ...ringStyle(-55, 180) }} />
-          {ringParticles(6, 180)}
-        </div>
-
-        <div
-          className="orbit-ring-reverse"
-          style={{ position: "absolute", inset: 0, "--speed": "28s" }}
-        >
-          <div style={{ ...ringStyle(-40, 220) }} />
-          <div
-            style={{
-              ...ringStyle(-40, 226, {
-                border: "1px solid rgba(59,130,246,0.08)",
-              }),
-            }}
-          />
-          {ringParticles(14, 220)}
-        </div>
-
-        <div
-          className="orbit-ring"
-          style={{ position: "absolute", inset: 0, "--speed": "35s" }}
+          className="absolute inset-0"
+          style={{ perspective: 1200, transformStyle: "preserve-3d" }}
         >
           <div
-            style={{
-              ...ringStyle(80, 300, {
-                border: "1px solid rgba(59,130,246,0.12)",
-              }),
-            }}
-          />
-          {ringParticles(22, 300)}
-        </div>
+            className="orbit-ring"
+            style={{ position: "absolute", inset: 0, "--speed": "22s" }}
+          >
+            <div style={{ ...ringStyle(65, 260) }} />
+            {ringParticles(6, 260)}
+          </div>
 
-        <div
-          className="orbit-particle"
-          style={{ position: "absolute", inset: 0, "--p-speed": "9s" }}
-        >
           <div
-            style={{
-              ...ringStyle(-55, 180, {
-                border: "1px solid rgba(59,130,246,0.15)",
-              }),
-            }}
-          />
-          {ringParticles(12, 180)}
+            className="orbit-ring-reverse"
+            style={{ position: "absolute", inset: 0, "--speed": "28s" }}
+          >
+            <div style={{ ...ringStyle(-40, 220) }} />
+            <div
+              style={{
+                ...ringStyle(-40, 226, {
+                  border: "1px solid rgba(59,130,246,0.08)",
+                }),
+              }}
+            />
+            {ringParticles(12, 220)}
+          </div>
+
+          <div
+            className="orbit-ring"
+            style={{ position: "absolute", inset: 0, "--speed": "35s" }}
+          >
+            <div style={{ ...ringStyle(80, 300) }} />
+            <div
+              style={{
+                ...ringStyle(80, 300, {
+                  border: "1px solid rgba(59,130,246,0.12)",
+                }),
+              }}
+            />
+            {ringParticles(16, 300)}
+          </div>
+
+          <div
+            className="orbit-particle"
+            style={{ position: "absolute", inset: 0, "--p-speed": "9s" }}
+          >
+            <div style={{ ...ringStyle(-55, 180) }} />
+            <div
+              style={{
+                ...ringStyle(-55, 180, {
+                  border: "1px solid rgba(59,130,246,0.15)",
+                }),
+              }}
+            />
+            {ringParticles(10, 180)}
+          </div>
         </div>
       </div>
 
       <Badge
         icon={<Code size={16} className="text-blue-500" />}
         label="Arduino"
-        className={`hidden sm:flex top-[3%] ${
+        className={`top-[3%] ${
           isRTL ? "left-[3%]" : "right-[3%]"
         } z-20`}
       />
       <Badge
         icon={<Cpu size={16} className="text-blue-500" />}
         label="Robotics"
-        className={`hidden sm:flex top-[44%] ${
+        className={`top-[44%] ${
           isRTL ? "right-[-1%]" : "left-[-1%]"
         } z-20`}
       />
       <Badge
         icon={<Zap size={16} className="text-blue-500" />}
         label="Electronics"
-        className={`hidden sm:flex bottom-[3%] ${
+        className={`bottom-[3%] ${
           isRTL ? "left-[3%]" : "right-[3%]"
         } z-20`}
       />
 
       <div
-        className={`hidden sm:flex absolute top-[12%] ${
+        className={`flex absolute top-[12%] ${
           isRTL ? "right-[0%]" : "left-[0%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+        } z-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
       >
         <Lightbulb size={16} />
       </div>
       <div
-        className={`hidden sm:flex absolute top-[2%] ${
+        className={`flex absolute top-[2%] ${
           isRTL ? "left-[20%]" : "right-[20%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+        } z-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
       >
         <Rocket size={16} />
       </div>
       <div
-        className={`hidden sm:flex absolute bottom-[40%] ${
+        className={`flex absolute bottom-[28%] lg:bottom-[40%] ${
           isRTL ? "right-[-1%]" : "left-[-1%]"
-        } z-20 w-10 h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
+        } z-20 w-8 h-8 sm:w-10 sm:h-10 rounded-full shadow-md bg-white items-center justify-center text-blue-500`}
       >
         <Users size={16} />
       </div>
@@ -312,27 +321,27 @@ function HeroRight() {
         src="/images/hero/uno.webp"
         alt="Arduino"
         loading="lazy"
-        className={`hidden sm:block absolute top-[5%] ${
+        className={`absolute top-[5%] ${
           isRTL ? "right-[15%]" : "left-[15%]"
-        } w-72 lg:w-80 -rotate-6 float-asset z-10`}
+        } w-36 sm:w-72 lg:w-80 -rotate-6 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
       <Img
         src="/images/hero/robocar.webp"
         alt="Robocar"
         fetchPriority="high"
-        className={`hidden sm:block absolute bottom-[22%] ${
+        className={`absolute bottom-[22%] ${
           isRTL ? "left-[-5%]" : "right-[-5%]"
-        } w-96 lg:w-[25rem] rotate-3 float-asset z-10`}
+        } w-52 sm:w-96 lg:w-[25rem] rotate-3 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
       <Img
         src="/images/hero/bord.webp"
         alt="Breadboard"
         loading="lazy"
-        className={`hidden sm:block absolute bottom-[5%] ${
+        className={`absolute bottom-[5%] ${
           isRTL ? "right-[5%]" : "left-[5%]"
-        } w-44 lg:w-52 -rotate-3 float-asset z-10`}
+        } w-24 sm:w-44 lg:w-52 -rotate-3 float-asset z-10`}
         style={{ filter: "drop-shadow(0 20px 40px rgba(59,130,246,0.4))" }}
       />
     </div>

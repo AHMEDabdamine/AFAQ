@@ -17,13 +17,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, "upload");
 const distDir = path.resolve(__dirname, "dist");
 
-fs.mkdirSync(uploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch {
+  // Read-only filesystem / serverless environment fallback
+}
 
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
   { realtime: { transport: ws } }
 );
+
+const BUCKET_NAME = "uploads";
+
+async function ensureBucketExists() {
+  try {
+    const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+    if (!buckets?.some((b) => b.name === BUCKET_NAME)) {
+      await supabaseAdmin.storage.createBucket(BUCKET_NAME, { public: true });
+    }
+  } catch (err) {
+    // Non-fatal if bucket exists or restricted
+  }
+}
+ensureBucketExists();
 
 // --- Helpers ---
 
@@ -79,22 +99,13 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// --- Multer with file-type whitelist ---
+// --- Multer with file-type whitelist (in-memory for cloud/serverless) ---
 
 const allowedExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
 
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const name = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
-    cb(null, name);
-  },
-});
-
 const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedExts.includes(ext)) return cb(null, true);
@@ -124,15 +135,44 @@ app.use((req, res, next) => {
 // --- File uploads (BEFORE json parser so body stream is intact) ---
 
 const uploadRouter = express.Router();
-uploadRouter.post("/upload", (req, res, next) => {
-  upload.single("file")(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: "No file" });
-    next();
-  });
-}, requireAuth, (req, res) => {
-  res.json({ url: `/uploads/${req.file.filename}` });
-});
+uploadRouter.post(
+  "/upload",
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      if (!req.file) return res.status(400).json({ error: "No file provided" });
+      next();
+    });
+  },
+  requireAuth,
+  async (req, res) => {
+    try {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 13)}${ext}`;
+
+      const { error } = await supabaseAdmin.storage
+        .from(BUCKET_NAME)
+        .upload(filename, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error("Supabase storage upload error:", error);
+        return res.status(500).json({ error: "Failed to upload file to storage" });
+      }
+
+      const { data: publicData } = supabaseAdmin.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(filename);
+
+      res.json({ url: publicData.publicUrl });
+    } catch (err) {
+      console.error("Upload handler error:", err);
+      res.status(500).json({ error: "Server upload error" });
+    }
+  }
+);
 app.use("/api", uploadRouter);
 
 // --- JSON parser & rate limiter for remaining API routes ---
@@ -140,16 +180,33 @@ app.use("/api", uploadRouter);
 app.use(express.json());
 app.use("/api/", apiLimiter);
 
-app.delete("/api/upload", requireAuth, (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: "No url" });
-  const filename = path.basename(url);
-  const filepath = path.join(uploadDir, filename);
-  if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-  res.json({ ok: true });
+app.delete("/api/upload", requireAuth, async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || typeof url !== "string") return res.status(400).json({ error: "No url" });
+
+  try {
+    if (url.includes("/storage/v1/object/public/")) {
+      const parts = url.split("/storage/v1/object/public/")[1]?.split("/");
+      if (parts && parts.length >= 2) {
+        const bucket = parts[0];
+        const filePath = decodeURIComponent(parts.slice(1).join("/"));
+        await supabaseAdmin.storage.from(bucket).remove([filePath]);
+      }
+    } else if (url.startsWith("/uploads/")) {
+      const filename = path.basename(url);
+      const filepath = path.join(uploadDir, filename);
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Delete upload error:", err);
+    res.status(500).json({ error: "Failed to delete file" });
+  }
 });
 
-app.use("/uploads", express.static(uploadDir));
+if (fs.existsSync(uploadDir)) {
+  app.use("/uploads", express.static(uploadDir));
+}
 
 // --- Page content (about image, etc.) ---
 
@@ -857,7 +914,11 @@ if (fs.existsSync(distDir)) {
   });
 }
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;

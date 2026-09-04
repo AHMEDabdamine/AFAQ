@@ -148,8 +148,24 @@ INSERT INTO storage.buckets (id, name, public) VALUES
   ('events', 'events', true),
   ('projects', 'projects', true),
   ('gallery', 'gallery', true),
-  ('avatars', 'avatars', true)
+  ('avatars', 'avatars', true),
+  ('uploads', 'uploads', true)
 ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "public_read_uploads_storage" ON storage.objects;
+CREATE POLICY "public_read_uploads_storage"
+ON storage.objects FOR SELECT USING (bucket_id = 'uploads');
+
+DROP POLICY IF EXISTS "admin_all_uploads_storage" ON storage.objects;
+CREATE POLICY "admin_all_uploads_storage"
+ON storage.objects FOR ALL USING (
+  bucket_id = 'uploads'
+  AND EXISTS (
+    SELECT 1 FROM admin_users
+    WHERE admin_users.user_id = auth.uid()
+      AND admin_users.is_active = true
+  )
+);
 
 DROP POLICY IF EXISTS "public_read_gallery_storage" ON storage.objects;
 CREATE POLICY "public_read_gallery_storage"

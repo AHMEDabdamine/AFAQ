@@ -155,7 +155,7 @@ export function uploadFile(file, onProgress) {
 }
 
 export async function deleteUploadedFile(url) {
-  if (!url || !url.startsWith('/uploads/')) return
+  if (!url) return
   await api('/api/upload', { method: 'DELETE', body: { url } })
 }
 
