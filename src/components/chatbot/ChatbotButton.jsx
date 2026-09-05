@@ -26,10 +26,19 @@ export default function ChatbotButton({ open, onClick }) {
   const mascotRef = useRef(null);
   const dragRef = useRef(null);
   const constraintsRef = useRef(null);
+  const hasDragged = useRef(false);
 
   // Drag offset from the anchored bottom-right corner.
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+
+  const handleClick = (e) => {
+    if (hasDragged.current) {
+      hasDragged.current = false;
+      return;
+    }
+    onClick?.(e);
+  };
 
   // Latch the angry face, then cool down after a few seconds.
   const triggerAngry = () => {
@@ -92,17 +101,27 @@ export default function ChatbotButton({ open, onClick }) {
               dragConstraints={constraintsRef}
               dragElastic={0.12}
               dragMomentum={false}
+              onPointerDown={() => {
+                hasDragged.current = false;
+              }}
               onDragStart={() => {
+                hasDragged.current = true;
                 setDragging(true);
                 dragAccum.current = 0;
               }}
               onDrag={(_e, info) => {
+                if (Math.hypot(info.offset.x, info.offset.y) > 4) {
+                  hasDragged.current = true;
+                }
                 dragAccum.current += Math.hypot(info.delta.x, info.delta.y);
                 if (dragAccum.current > DRAG_ANGRY_DISTANCE) triggerAngry();
               }}
               onDragEnd={() => {
                 setDragging(false);
                 snapToEdge();
+                setTimeout(() => {
+                  hasDragged.current = false;
+                }, 120);
               }}
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -116,7 +135,7 @@ export default function ChatbotButton({ open, onClick }) {
                 if (hoverCount.current > HOVER_ANGRY_THRESHOLD) triggerAngry();
               }}
               onHoverEnd={() => setIsHovered(false)}
-              onClick={onClick}
+              onClick={handleClick}
               className="flex items-center justify-center cursor-pointer bg-transparent border-none p-0 drop-shadow-xl touch-none"
               title="Open AI Assistant"
             >
