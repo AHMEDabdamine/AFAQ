@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
+import { triggerHaptic } from './haptics'
 
 const suggestions = [
   { en: 'What events are coming up?', ar: 'ما هي الفعاليات القادمة؟', fr: 'Quels sont les événements à venir?' },
@@ -26,8 +27,12 @@ export default function SuggestedQuestions({ onSelect, lang }) {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.05 }}
-            onClick={() => onSelect(s[lang] || s.en)}
-            className="text-xs px-3 py-1.5 rounded-xl border transition-colors hover:opacity-80 cursor-pointer"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              triggerHaptic('light');
+              onSelect(s[lang] || s.en);
+            }}
+            className="text-xs px-3 py-1.5 rounded-xl border transition-colors hover:opacity-80 active:opacity-70 cursor-pointer"
             style={{
               borderColor: 'var(--color-border-light)',
               background: 'var(--color-card)',

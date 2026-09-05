@@ -5,6 +5,7 @@ import ChatMessage from "./ChatMessage";
 import SuggestedQuestions from "./SuggestedQuestions";
 import AfaqMascot from "./AfaqMascot";
 import { useCursorGaze } from "./useCursorGaze";
+import { triggerHaptic } from "./haptics";
 
 const STORAGE_KEY = "afaq-chat-history";
 const MAX_HISTORY = 50;
@@ -41,8 +42,11 @@ export default function ChatbotModal({ open, onClose }) {
   const [inputFocused, setInputFocused] = useState(false);
   const [emptyHovered, setEmptyHovered] = useState(false);
   const [emptyAngry, setEmptyAngry] = useState(false);
+  const [emptyCheer, setEmptyCheer] = useState(false);
   const emptyHoverCount = useRef(0);
   const emptyAngryTimer = useRef(0);
+  const emptyCheerTimer = useRef(0);
+  const touchStartY = useRef(0);
   const [greeting, setGreeting] = useState(false);
   const listRef = useRef(null);
   const inputRef = useRef(null);
@@ -57,21 +61,45 @@ export default function ChatbotModal({ open, onClose }) {
 
   const getEmptyMascotProps = () => {
     if (emptyAngry) return { expression: "angry-brows" };
+    if (emptyCheer) return { animation: "celebrate" };
     if (emptyHovered) return { animation: "playful" };
     if (input.trim().length > 0 || inputFocused) return { animation: "listening" };
     if (greeting) return { animation: "happy" };
     return { expression: gaze };
   };
 
+  const handleEmptyTap = () => {
+    setEmptyCheer(true);
+    triggerHaptic("success");
+    clearTimeout(emptyCheerTimer.current);
+    emptyCheerTimer.current = setTimeout(() => setEmptyCheer(false), 2400);
+  };
+
   // Pester it more than 3 times and it holds an angry stare, then cools down.
   const triggerEmptyAngry = () => {
     setEmptyAngry(true);
     emptyHoverCount.current = 0;
+    triggerHaptic("heavy");
     clearTimeout(emptyAngryTimer.current);
     emptyAngryTimer.current = setTimeout(() => setEmptyAngry(false), 3000);
   };
 
-  useEffect(() => () => clearTimeout(emptyAngryTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(emptyAngryTimer.current);
+    clearTimeout(emptyCheerTimer.current);
+  }, []);
+
+  const handleTouchStart = (e) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    if (touchEndY - touchStartY.current > 70) {
+      triggerHaptic("medium");
+      onClose();
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -104,6 +132,7 @@ export default function ChatbotModal({ open, onClose }) {
 
   const clearHistory = () => {
     if (abortRef.current) abortRef.current.abort();
+    triggerHaptic("medium");
     setMessages([]);
     saveHistory([]);
     setError(null);
@@ -115,6 +144,7 @@ export default function ChatbotModal({ open, onClose }) {
       abortRef.current.abort();
       abortRef.current = null;
     }
+    triggerHaptic("medium");
     setLoading(false);
     setStreamingId(null);
   };
@@ -130,6 +160,7 @@ export default function ChatbotModal({ open, onClose }) {
       const msg = text || input.trim();
       if (!msg || loading) return;
 
+      triggerHaptic("light");
       setInput("");
       if (inputRef.current) {
         inputRef.current.style.height = "auto";
@@ -277,9 +308,24 @@ export default function ChatbotModal({ open, onClose }) {
               borderColor: "var(--color-border-light)",
             }}
           >
+            {/* Mobile pull-down drag indicator */}
+            <div
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="w-full pt-2 pb-1 flex justify-center items-center md:hidden cursor-grab active:cursor-grabbing select-none"
+              style={{ background: "var(--color-card)" }}
+            >
+              <div
+                className="w-10 h-1.5 rounded-full"
+                style={{ background: "var(--color-border)" }}
+              />
+            </div>
+
             {/* ── Header ── */}
             <div
-              className="flex items-center justify-between px-3 md:px-4 py-3 border-b flex-shrink-0"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="flex items-center justify-between px-3 md:px-4 py-3 border-b flex-shrink-0 select-none"
               style={{
                 borderColor: "var(--color-border-light)",
                 background: "var(--color-card)",
@@ -351,7 +397,10 @@ export default function ChatbotModal({ open, onClose }) {
                   </button>
                 )}
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    triggerHaptic("light");
+                    onClose();
+                  }}
                   className="p-2 rounded-xl hover:opacity-70 transition-opacity cursor-pointer"
                   style={{ color: "var(--color-text-muted)" }}
                 >
@@ -372,7 +421,8 @@ export default function ChatbotModal({ open, onClose }) {
                 <div className="flex flex-col items-center justify-center h-full text-center px-6 gap-3">
                   <div
                     ref={emptyRef}
-                    className="w-20 h-20 md:w-24 md:h-24 flex items-center justify-center cursor-pointer"
+                    className="w-20 h-20 md:w-24 md:h-24 flex items-center justify-center cursor-pointer transition-transform active:scale-95"
+                    onClick={handleEmptyTap}
                     onMouseEnter={() => {
                       setEmptyHovered(true);
                       emptyHoverCount.current += 1;
