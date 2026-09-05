@@ -10,7 +10,7 @@ import AfaqMascot from "./AfaqMascot";
 import { useCursorGaze } from "./useCursorGaze";
 
 const HOVER_ANGRY_THRESHOLD = 6; // hovers beyond this make it angry
-const DRAG_ANGRY_DISTANCE = 480; // px of accumulated drag before it gets angry
+const DRAG_ANGRY_DISTANCE = 5000; // px of accumulated drag before it gets angry
 const ANGRY_COOLDOWN_MS = 3000; // angry face holds this long, then cools down
 const EDGE_MARGIN = 24; // gap from the viewport edge when docked
 
