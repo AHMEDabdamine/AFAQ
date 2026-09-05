@@ -1,46 +1,79 @@
-import { db } from '../db/client.js'
-import { aiKnowledge } from '../../src/db/schema.js'
-import { like, or, eq, asc, desc, and, sql } from 'drizzle-orm'
+import { supabaseAdmin } from '../db/client.js'
 
 export async function searchKnowledge(query) {
-  return db.select().from(aiKnowledge).where(
-    and(
-      eq(aiKnowledge.published, true),
-      or(
-        like(aiKnowledge.title, `%${query}%`),
-        like(aiKnowledge.content, `%${query}%`),
-        like(aiKnowledge.category, `%${query}%`),
-        sql`${query} = ANY(${aiKnowledge.keywords})`,
-        like(aiKnowledge.slug, `%${query}%`),
-      ),
-    ),
-  ).orderBy(asc(aiKnowledge.id)).limit(20)
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .select('*')
+    .eq('published', true)
+    .or(`title.ilike.%${query}%,content.ilike.%${query}%,category.ilike.%${query}%,slug.ilike.%${query}%`)
+    .order('id', { ascending: true })
+    .limit(20)
+
+  if (error) throw error
+  return data || []
 }
 
 export async function getAllKnowledge() {
-  return db.select().from(aiKnowledge).orderBy(desc(aiKnowledge.updatedAt))
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .select('*')
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
 }
 
 export async function getPublishedKnowledge() {
-  return db.select().from(aiKnowledge).where(eq(aiKnowledge.published, true)).orderBy(asc(aiKnowledge.id))
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .select('*')
+    .eq('published', true)
+    .order('id', { ascending: true })
+
+  if (error) throw error
+  return data || []
 }
 
 export async function getKnowledgeByCategory(category) {
-  return db.select().from(aiKnowledge).where(
-    and(eq(aiKnowledge.published, true), eq(aiKnowledge.category, category)),
-  ).orderBy(asc(aiKnowledge.id))
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .select('*')
+    .eq('published', true)
+    .eq('category', category)
+    .order('id', { ascending: true })
+
+  if (error) throw error
+  return data || []
 }
 
-export async function createKnowledge(data) {
-  const [result] = await db.insert(aiKnowledge).values(data).returning()
-  return result
+export async function createKnowledge(record) {
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .insert(record)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
-export async function updateKnowledge(id, data) {
-  const [result] = await db.update(aiKnowledge).set(data).where(eq(aiKnowledge.id, id)).returning()
-  return result
+export async function updateKnowledge(id, record) {
+  const { data, error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .update({ ...record, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function deleteKnowledge(id) {
-  await db.delete(aiKnowledge).where(eq(aiKnowledge.id, id))
+  const { error } = await supabaseAdmin
+    .from('ai_knowledge')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
 }

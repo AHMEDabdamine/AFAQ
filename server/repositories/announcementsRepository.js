@@ -1,25 +1,32 @@
-import { db } from '../db/client.js'
-import { announcements } from '../../src/db/schema.js'
-import { like, or, and, eq } from 'drizzle-orm'
+import { supabaseAdmin } from '../db/client.js'
 
 export async function searchAnnouncements(query) {
-  return db.select().from(announcements).where(
-    and(
-      eq(announcements.isPublished, true),
-      or(
-        like(announcements.titleEn, `%${query}%`),
-        like(announcements.titleAr, `%${query}%`),
-        like(announcements.titleFr, `%${query}%`),
-        like(announcements.contentEn, `%${query}%`),
-        like(announcements.contentAr, `%${query}%`),
-        like(announcements.contentFr, `%${query}%`),
-      ),
-    ),
-  ).orderBy(announcements.createdAt).limit(10)
+  const { data, error } = await supabaseAdmin
+    .from('announcements')
+    .select('*')
+    .eq('is_published', true)
+    .or(`title_en.ilike.%${query}%,title_ar.ilike.%${query}%,title_fr.ilike.%${query}%,content_en.ilike.%${query}%,content_ar.ilike.%${query}%,content_fr.ilike.%${query}%`)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.error('searchAnnouncements error:', error)
+    return []
+  }
+  return data || []
 }
 
 export async function getRecentAnnouncements(limit = 5) {
-  return db.select().from(announcements).where(
-    eq(announcements.isPublished, true),
-  ).orderBy(announcements.createdAt).limit(limit)
+  const { data, error } = await supabaseAdmin
+    .from('announcements')
+    .select('*')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('getRecentAnnouncements error:', error)
+    return []
+  }
+  return data || []
 }

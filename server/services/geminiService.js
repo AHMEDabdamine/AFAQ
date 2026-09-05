@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import * as or from './openRouterService.js'
+// import * as or from './openRouterService.js' // OpenRouter disabled — OpenCode Zen is the main provider
+import * as zen from './openCodeZenService.js'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
@@ -79,27 +80,46 @@ function buildChat(model, context) {
 export async function* generateResponseStream(userMessage, context) {
   let lastError = null
 
+  // 1) OpenCode Zen (primary, free models)
+  try {
+    let yielded = false
+    for await (const chunk of zen.generateZenStream(userMessage, context)) {
+      yielded = true
+      yield chunk
+    }
+    if (yielded) return
+  } catch (error) {
+    lastError = error
+  }
+
+  // 2) Gemini fallback
   for (const modelName of MODELS) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
       const chat = buildChat(model, context)
       const result = await chat.sendMessageStream(userMessage)
 
+      let yielded = false
       for await (const chunk of result.stream) {
         const text = chunk.text()
-        if (text) yield text
+        if (text) {
+          yielded = true
+          yield text
+        }
       }
-      return
+      if (yielded) return
     } catch (error) {
       lastError = error
     }
   }
 
-  const orGen = or.generateORStream(userMessage, context)
-  for await (const chunk of orGen) {
-    yield chunk
-    return
-  }
+  // 3) OpenRouter fallback — disabled; OpenCode Zen is the main provider.
+  // let orYielded = false
+  // for await (const chunk of or.generateORStream(userMessage, context)) {
+  //   orYielded = true
+  //   yield chunk
+  // }
+  // if (orYielded) return
 
   throw lastError || new Error('All AI models failed')
 }
@@ -109,6 +129,15 @@ export async function generateResponse(userMessage, context) {
   let allQuota = true
   let lastRetryAfter = 60
 
+  // 1) OpenCode Zen (primary, free models)
+  try {
+    const zenResult = await zen.generateZenResponse(userMessage, context)
+    if (zenResult) return zenResult
+  } catch (error) {
+    lastError = error
+  }
+
+  // 2) Gemini fallback
   for (const modelName of MODELS) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
@@ -124,8 +153,9 @@ export async function generateResponse(userMessage, context) {
     }
   }
 
-  const orResult = await or.generateORResponse(userMessage, context)
-  if (orResult) return orResult
+  // OpenRouter fallback — disabled; OpenCode Zen is the main provider.
+  // const orResult = await or.generateORResponse(userMessage, context)
+  // if (orResult) return orResult
 
   if (allQuota) throw new QuotaError(lastRetryAfter)
   throw lastError || new Error('All AI models failed')

@@ -1,24 +1,32 @@
-import { db } from '../db/client.js'
-import { faq } from '../../src/db/schema.js'
-import { like, or, and, eq } from 'drizzle-orm'
+import { supabaseAdmin } from '../db/client.js'
 
 export async function searchFaqs(query) {
-  const results = await db.select().from(faq).where(
-    and(
-      eq(faq.isPublished, true),
-      or(
-        like(faq.questionEn, `%${query}%`),
-        like(faq.questionAr, `%${query}%`),
-        like(faq.questionFr, `%${query}%`),
-        like(faq.answerEn, `%${query}%`),
-        like(faq.answerAr, `%${query}%`),
-        like(faq.answerFr, `%${query}%`),
-      ),
-    ),
-  ).orderBy(faq.sortOrder).limit(10)
-  return results
+  const { data, error } = await supabaseAdmin
+    .from('faq')
+    .select('*')
+    .eq('is_published', true)
+    .or(`question_en.ilike.%${query}%,question_ar.ilike.%${query}%,question_fr.ilike.%${query}%,answer_en.ilike.%${query}%,answer_ar.ilike.%${query}%,answer_fr.ilike.%${query}%`)
+    .order('sort_order', { ascending: true })
+    .limit(10)
+
+  if (error) {
+    console.error('searchFaqs error:', error)
+    return []
+  }
+  return data || []
 }
 
 export async function getAllFaqs() {
-  return db.select().from(faq).where(eq(faq.isPublished, true)).orderBy(faq.sortOrder).limit(10)
+  const { data, error } = await supabaseAdmin
+    .from('faq')
+    .select('*')
+    .eq('is_published', true)
+    .order('sort_order', { ascending: true })
+    .limit(10)
+
+  if (error) {
+    console.error('getAllFaqs error:', error)
+    return []
+  }
+  return data || []
 }

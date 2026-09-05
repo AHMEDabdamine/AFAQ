@@ -208,6 +208,21 @@ if (fs.existsSync(uploadDir)) {
   app.use("/uploads", express.static(uploadDir));
 }
 
+app.get("/uploads/:filename", async (req, res) => {
+  const { filename } = req.params;
+  const localPath = path.join(uploadDir, filename);
+  if (fs.existsSync(localPath)) {
+    return res.sendFile(localPath);
+  }
+  const { data: publicData } = supabaseAdmin.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(filename);
+  if (publicData?.publicUrl) {
+    return res.redirect(publicData.publicUrl);
+  }
+  res.status(404).json({ error: "File not found" });
+});
+
 // --- Page content (about image, etc.) ---
 
 app.get("/api/page-content/:section", async (req, res) => {

@@ -192,7 +192,7 @@ function HeroRight() {
   return (
     <div
       ref={visualRef}
-      className="hero-visual flex-1 relative w-full mx-auto max-w-[280px] sm:max-w-sm lg:max-w-none h-[320px] sm:h-[400px] lg:h-[520px] xl:h-[600px]"
+      className="hidden lg:block hero-visual flex-1 relative w-full mx-auto lg:max-w-none h-[520px] xl:h-[600px]"
     >
       <Img
         src="/images/hero/bolt.webp"
@@ -469,10 +469,10 @@ export default function HeroSection() {
        stays a full viewport (border-box already counts that padding), and svh
        rather than vh keeps mobile browser chrome from clipping the stats bar. */
     <section
-      className="bg-[#EEF2FF] flex flex-col"
+      className="bg-[#EEF2FF] flex flex-col justify-between"
       style={{ minHeight: "100svh", paddingTop: "var(--nav-h)" }}
     >
-      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-6 lg:gap-8 items-center max-w-7xl mx-auto w-full pt-8 pb-12 sm:pt-12 sm:pb-20">
+      <div className="flex flex-1 flex-col lg:flex-row px-6 sm:px-8 lg:px-16 gap-6 lg:gap-8 items-center justify-center max-w-7xl mx-auto w-full py-12 sm:py-16 lg:py-20">
         <HeroLeft />
         <HeroRight />
       </div>

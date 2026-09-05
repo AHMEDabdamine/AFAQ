@@ -1,23 +1,32 @@
-import { db } from '../db/client.js'
-import { projects } from '../../src/db/schema.js'
-import { like, or, and, eq } from 'drizzle-orm'
+import { supabaseAdmin } from '../db/client.js'
 
 export async function searchProjects(query) {
-  return db.select().from(projects).where(
-    and(
-      eq(projects.isPublished, true),
-      or(
-        like(projects.titleEn, `%${query}%`),
-        like(projects.titleAr, `%${query}%`),
-        like(projects.titleFr, `%${query}%`),
-        like(projects.descriptionEn, `%${query}%`),
-        like(projects.descriptionAr, `%${query}%`),
-        like(projects.descriptionFr, `%${query}%`),
-      ),
-    ),
-  ).orderBy(projects.createdAt).limit(10)
+  const { data, error } = await supabaseAdmin
+    .from('projects')
+    .select('*')
+    .eq('is_published', true)
+    .or(`title_en.ilike.%${query}%,title_ar.ilike.%${query}%,title_fr.ilike.%${query}%,description_en.ilike.%${query}%,description_ar.ilike.%${query}%,description_fr.ilike.%${query}%`)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.error('searchProjects error:', error)
+    return []
+  }
+  return data || []
 }
 
 export async function getAllPublishedProjects() {
-  return db.select().from(projects).where(eq(projects.isPublished, true)).orderBy(projects.createdAt).limit(10)
+  const { data, error } = await supabaseAdmin
+    .from('projects')
+    .select('*')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.error('getAllPublishedProjects error:', error)
+    return []
+  }
+  return data || []
 }

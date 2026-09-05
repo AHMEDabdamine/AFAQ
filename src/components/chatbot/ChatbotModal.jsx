@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Trash2, RefreshCw, StopCircle } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 import SuggestedQuestions from "./SuggestedQuestions";
+import AfaqMascot from "./AfaqMascot";
+import { useCursorGaze } from "./useCursorGaze";
 
 const STORAGE_KEY = "afaq-chat-history";
 const MAX_HISTORY = 50;
@@ -37,24 +39,63 @@ export default function ChatbotModal({ open, onClose }) {
   const [error, setError] = useState(null);
   const [streamingId, setStreamingId] = useState(null);
   const [inputFocused, setInputFocused] = useState(false);
+  const [emptyHovered, setEmptyHovered] = useState(false);
+  const [emptyAngry, setEmptyAngry] = useState(false);
+  const emptyHoverCount = useRef(0);
+  const emptyAngryTimer = useRef(0);
+  const [greeting, setGreeting] = useState(false);
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+  const emptyRef = useRef(null);
 
   const lang = document.documentElement.lang || "en";
 
+  // Idle empty-state mascot tracks the cursor via expression; active states
+  // (hover/typing/greeting) use animations instead.
+  const gaze = useCursorGaze(emptyRef, open && messages.length === 0);
+
+  const getEmptyMascotProps = () => {
+    if (emptyAngry) return { expression: "angry-brows" };
+    if (emptyHovered) return { animation: "playful" };
+    if (input.trim().length > 0 || inputFocused) return { animation: "listening" };
+    if (greeting) return { animation: "happy" };
+    return { expression: gaze };
+  };
+
+  // Pester it more than 3 times and it holds an angry stare, then cools down.
+  const triggerEmptyAngry = () => {
+    setEmptyAngry(true);
+    emptyHoverCount.current = 0;
+    clearTimeout(emptyAngryTimer.current);
+    emptyAngryTimer.current = setTimeout(() => setEmptyAngry(false), 3000);
+  };
+
+  useEffect(() => () => clearTimeout(emptyAngryTimer.current), []);
+
   useEffect(() => {
-    if (open && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+    if (open) {
+      if (inputRef.current) {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+      // Warm greeting wiggle when the panel opens, then settle to idle.
+      setGreeting(true);
+      const t = setTimeout(() => setGreeting(false), 2600);
+      return () => clearTimeout(t);
     }
+    setGreeting(false);
   }, [open]);
 
   const scrollToBottom = useCallback(() => {
-    if (listRef.current) {
-      requestAnimationFrame(() => {
-        listRef.current.scrollTop = listRef.current.scrollHeight;
-      });
-    }
+    const el = listRef.current;
+    if (!el) return;
+    // Follow the stream only when the user is already near the bottom, so we
+    // don't yank them back down while they scroll up to read.
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!nearBottom) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
   }, []);
 
   useEffect(() => {
@@ -244,15 +285,16 @@ export default function ChatbotModal({ open, onClose }) {
                 background: "var(--color-card)",
               }}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 select-none">
                 <div
-                  className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0"
-                  style={{ background: "var(--color-accent)" }}
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-xl overflow-hidden flex-shrink-0 border"
+                  style={{ borderColor: "var(--color-border-light)" }}
                 >
                   <img
-                    src="/images/ai/pfp.webp"
-                    alt="AI"
+                    src="/cloudee-snapshot.png"
+                    alt="AFAQ Assistant"
                     className="w-full h-full object-cover"
+                    draggable={false}
                   />
                 </div>
                 <div>
@@ -321,21 +363,24 @@ export default function ChatbotModal({ open, onClose }) {
             {/* ── Messages ── */}
             <div
               ref={listRef}
-              className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4 scroll-smooth"
-              style={{ background: "var(--color-bg)" }}
+              data-lenis-prevent
+              className="flex-1 overflow-y-auto overscroll-contain px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4 scroll-smooth"
+              style={{ background: "var(--color-bg)", overscrollBehavior: "contain" }}
             >
               {/* Empty state */}
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-6 gap-3">
                   <div
-                    className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center overflow-hidden"
-                    style={{ background: "var(--color-accent-soft)" }}
+                    ref={emptyRef}
+                    className="w-20 h-20 md:w-24 md:h-24 flex items-center justify-center cursor-pointer"
+                    onMouseEnter={() => {
+                      setEmptyHovered(true);
+                      emptyHoverCount.current += 1;
+                      if (emptyHoverCount.current > 3) triggerEmptyAngry();
+                    }}
+                    onMouseLeave={() => setEmptyHovered(false)}
                   >
-                    <img
-                      src="/images/ai/pfp.webp"
-                      alt="AI"
-                      className="w-full h-full object-cover"
-                    />
+                    <AfaqMascot size={86} {...getEmptyMascotProps()} />
                   </div>
                   <div>
                     <p
@@ -389,12 +434,10 @@ export default function ChatbotModal({ open, onClose }) {
                 >
                   <div
                     className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden"
-                    style={{ background: "var(--color-bg-alt)" }}
                   >
-                    <img
-                      src="/images/ai/pfp.webp"
-                      alt="AI"
-                      className="w-full h-full object-cover"
+                    <AfaqMascot
+                      size={36}
+                      animation="thinking"
                     />
                   </div>
                   <div className="flex flex-col items-start">
