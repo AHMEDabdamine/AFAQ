@@ -1,8 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-// import * as or from './openRouterService.js' // OpenRouter disabled — OpenCode Zen is the main provider
+import * as or from './openRouterService.js'
 import * as zen from './openCodeZenService.js'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const getGenAI = () => {
+  const key = process.env.GEMINI_API_KEY
+  return key ? new GoogleGenerativeAI(key) : null
+}
 
 const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
 
@@ -93,33 +96,40 @@ export async function* generateResponseStream(userMessage, context) {
   }
 
   // 2) Gemini fallback
-  for (const modelName of MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
-      const chat = buildChat(model, context)
-      const result = await chat.sendMessageStream(userMessage)
+  const genAI = getGenAI()
+  if (genAI) {
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
+        const chat = buildChat(model, context)
+        const result = await chat.sendMessageStream(userMessage)
 
-      let yielded = false
-      for await (const chunk of result.stream) {
-        const text = chunk.text()
-        if (text) {
-          yielded = true
-          yield text
+        let yielded = false
+        for await (const chunk of result.stream) {
+          const text = chunk.text()
+          if (text) {
+            yielded = true
+            yield text
+          }
         }
+        if (yielded) return
+      } catch (error) {
+        lastError = error
       }
-      if (yielded) return
-    } catch (error) {
-      lastError = error
     }
   }
 
-  // 3) OpenRouter fallback — disabled; OpenCode Zen is the main provider.
-  // let orYielded = false
-  // for await (const chunk of or.generateORStream(userMessage, context)) {
-  //   orYielded = true
-  //   yield chunk
-  // }
-  // if (orYielded) return
+  // 3) OpenRouter fallback
+  try {
+    let orYielded = false
+    for await (const chunk of or.generateORStream(userMessage, context)) {
+      orYielded = true
+      yield chunk
+    }
+    if (orYielded) return
+  } catch (error) {
+    lastError = error
+  }
 
   throw lastError || new Error('All AI models failed')
 }
@@ -138,25 +148,34 @@ export async function generateResponse(userMessage, context) {
   }
 
   // 2) Gemini fallback
-  for (const modelName of MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
-      const chat = buildChat(model, context)
-      const result = await chat.sendMessage(userMessage)
-      return result.response.text()
-    } catch (error) {
-      lastError = error
-      const isQuota = error.message?.includes('429') || error.message?.includes('quota')
-      const retryMatch = error.message?.match(/retry in (\d+\.?\d*)s/)
-      if (!isQuota) allQuota = false
-      if (retryMatch) lastRetryAfter = parseFloat(retryMatch[1])
+  const genAI = getGenAI()
+  if (genAI) {
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName, ...getModelConfig() })
+        const chat = buildChat(model, context)
+        const result = await chat.sendMessage(userMessage)
+        return result.response.text()
+      } catch (error) {
+        lastError = error
+        const isQuota = error.message?.includes('429') || error.message?.includes('quota')
+        const retryMatch = error.message?.match(/retry in (\d+\.?\d*)s/)
+        if (!isQuota) allQuota = false
+        if (retryMatch) lastRetryAfter = parseFloat(retryMatch[1])
+      }
     }
   }
 
-  // OpenRouter fallback — disabled; OpenCode Zen is the main provider.
-  // const orResult = await or.generateORResponse(userMessage, context)
-  // if (orResult) return orResult
+  // 3) OpenRouter fallback
+  try {
+    const orResult = await or.generateORResponse(userMessage, context)
+    if (orResult) return orResult
+  } catch (error) {
+    lastError = error
+  }
 
-  if (allQuota) throw new QuotaError(lastRetryAfter)
+  if (allQuota && lastError) {
+    throw new QuotaError(lastRetryAfter)
+  }
   throw lastError || new Error('All AI models failed')
 }
